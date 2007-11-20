@@ -1,0 +1,28 @@
+# Circulation pump, simulating tide changes every 6 hours
+Time 05:50 Off Pump:Circulation
+Time 06:10 On  Pump:Circulation
+Time 11:50 Off Pump:Circulation
+Time 12:10 On  Pump:Circulation
+Time 17:50 Off Pump:Circulation
+Time 18:10 On  Pump:Circulation
+Time 23:50 Off Pump:Circulation
+Time 00:10 On  Pump:Circulation
+
+# Light timing
+Time 12:00 On  Light:Dawn
+Time 13:00 On  Light:Morning
+Time 15:00 On  Light:Full
+Time 21:00 Off Light:Full
+Time 23:00 Off Light:Morning
+Time 00:00 Off Light:Dawn
+
+# Refugium light timing
+Time 00:00 On  Light:Refugium
+Time 12:00 Off Light:Refugium
+
+# Temperature Controls
+Temp <75F On Temp:Hotter
+Temp >80F Off Temp:Hotter
+
+Temp >85F On Temp:Cooler
+Temp <80F Off Temp:Cooler
