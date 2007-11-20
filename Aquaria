@@ -1,0 +1,152 @@
+#!/usr/bin/perl
+# Aquarium Power Manager
+# Configuration file is in $HOME/.Aquaria/schedule
+# Run this from cron every 5 minutes or so.
+# Will 'catch up' to the current state even for multi-hour power outages
+#
+# Copyright 2007, Jason S. McMullan <jason.mcmullan@gmail.com>
+#
+# GPL v2.0
+
+$DOTDIR="$ENV{HOME}/.Aquaria";
+system("mkdir -p \"$DOTDIR\"");
+
+$CONFIG=$DOTDIR."/config";
+$SCHEDULE=$DOTDIR."/schedule";
+
+my %Switch;
+my %Schedule;
+my %Threshold;
+
+sub power_set {
+	my ($label, $state) = @_;
+
+	system("wget --http-user=admin --http-password=1234 -O /dev/null -q \"http://192.168.0.100/outlet?".$Switch{$label}->{'id'}."=".$state."\"");
+}
+
+
+sub power_config {
+	open(CONF, "wget -O /dev/stdout -q --http-password=1234 --http-user=admin http://192.168.0.100/admin.cgi |") or die "Can't open port to read config!";
+
+	my $id=1;
+	while (<CONF>) {
+		if ($_ =~ /^<td>(.*)<\/td>/) {
+			$Switch{$1} = { 'id'=>$id };
+			$id++;
+		}
+	}
+	close(CONF);
+
+	open(SCHED, "< $SCHEDULE") or die "Can't read schedule!";
+
+	while (<SCHED>) {
+		if ($_ =~ /^Time\s+([0-9][0-9]):([0-9][0-9])\s+(On|Off)\s+([^\s]*)\s*$/) {
+			my $time = $1 * 60 + $2;
+			my $state = $3;
+			$state =~ tr/[a-z]/[A-Z]/;
+			my $label = $4;
+
+			if ( ! defined $Switch{$label}->{'id'}) {
+				printf STDERR "Label $label is not defined by the switch!";
+				exit 1;
+			}
+
+			push @{$Schedule{$time}}, { 'label'=>$label, 'state'=>$state};
+		}
+		if ($_ =~ /^Temp\s+([<>=!]+)([0-9.]+)([FC])\s+(On|Off)\s+([^\s]*)\s*$/) {
+			my $condition = $1;
+			my $temp = $2;
+			my $scale = $3;
+			my $state = $4;
+			$state =~ tr/[a-z]/[A-Z]/;
+			my $label = $5;
+
+			# Convert to degress C
+			if ($scale eq 'F') {
+				$scale = 'C';
+				$temp = (($temp-32) * 5.0/9.0);
+			}
+
+			if ( ! defined $Switch{$label}->{'id'}) {
+				printf STDERR "Label $label is not defined by the switch!";
+				exit 1;
+			}
+
+			push @{$Threshold{$label}}, {'temp'=>$temp, 'condition' => $condition, 'state' => $state };
+		}
+	}
+
+	close(SCHED);
+}
+
+sub schedule_check {
+	my ($end)=@_;
+
+	my $t;
+	my $event;
+
+	for ($t = 0; $t <= $end; $t++) {
+		next if (! defined $Schedule{$t} );
+		foreach $event (@{$Schedule{$t}}) {
+			$Switch{$event->{'label'}}->{'state'}=$event->{'state'};
+		}
+	}
+}
+
+sub temp_check {
+	my $label;
+
+	my $curr_temp=`gotemp -C` + 0;
+
+	foreach $label (keys %Threshold) {
+		foreach $thresh (@{$Threshold{$label}}) {
+			my $cond = $thresh->{'condition'};
+			my $temp = $thresh->{'temp'};
+
+			my $doit = eval "$curr_temp $cond $temp";
+
+			if ($doit) {
+				&power_set($label, $thresh->{'state'});
+			}
+		}
+	}
+}
+
+sub power_out {
+
+	my $label;
+
+	foreach $label (keys %Switch) {
+		next if (!defined $Switch{$label}->{'state'});
+		&power_set($label,  $Switch{$label}->{'state'});
+	}
+}
+
+sub main {
+	my ($time)=@_;
+
+	# Generate the power port ID configuration
+	&power_config;
+
+	my $NOW_Hour;
+	my $NOW_Min;
+
+	# Run the states
+	if ( "$time" eq "") {
+		$NOW_Hour=`date +%H` + 0;
+		$NOW_Min=`date +%M` + 0;
+	} else {
+		($NOW_Hour, $NOW_Min)=split($time,/:/);
+	}
+
+	my $NOW = $NOW_Hour * 60 + $NOW_Min;
+
+	&schedule_check(23 * 60 + 59);
+	&schedule_check($NOW);
+
+	&temp_check();
+
+	&power_out();
+}
+
+&main(@ARGV)
