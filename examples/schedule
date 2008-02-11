@@ -16,13 +16,25 @@ Time 21:00 Off Light:Full
 Time 23:00 Off Light:Morning
 Time 00:00 Off Light:Dawn
 
-# Refugium light timing
+# Refugium light timing (12 hour cycle)
 Time 00:00 On  Light:Refugium
 Time 12:00 Off Light:Refugium
 
-# Temperature Controls
-Temp <75F On Temp:Hotter
-Temp >80F Off Temp:Hotter
+# Refugium light timing (24 hour continuous)
+#Time 00:00 On  Light:Refugium
 
-Temp >85F On Temp:Cooler
-Temp <80F Off Temp:Cooler
+# Temperature Controls - 77-80F range
+#Temp <77F On Temp:Hotter
+#Temp >78F Off Temp:Hotter
+#
+#Temp >80F On Temp:Cooler
+#Temp <79F Off Temp:Cooler
+
+
+# Temperature Controls - 72-75F range
+Temp <72F On Temp:Hotter
+Temp >73F Off Temp:Hotter
+
+Temp >75F On Temp:Cooler
+Temp <74F Off Temp:Cooler
+

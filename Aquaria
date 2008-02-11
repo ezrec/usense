@@ -96,7 +96,8 @@ sub schedule_check {
 sub temp_check {
 	my $label;
 
-	my $curr_temp=`gotemp -C` + 0;
+	`gotemp -C`;
+	my $curr_temp=`gotemp -C`;
 
 	foreach $label (keys %Threshold) {
 		foreach $thresh (@{$Threshold{$label}}) {
