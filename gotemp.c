@@ -20,9 +20,65 @@
 
 #include <usb.h>
 
-struct usb_dev_handle *gotemp_acquire(int index)
+struct gotemp {
+	usb_dev_handle *usb;
+	/* This is close to the structure I found in Greg's Code
+	 * NOTE: This is in little endian format!
+	 */
+	struct packet {
+	    unsigned char measurements;
+	    unsigned char counter;
+	    int16_t measurement0;
+	    int16_t measurement1;
+	    int16_t measurement2;
+	} __attribute__((packed)) packet;
+
+	struct {
+		double offset;
+		double ratio;
+	} calibrate;
+};
+
+static void gotemp_calibrate(struct gotemp *gotemp)
+{
+	FILE *inf;
+	char buff[PATH_MAX];
+
+	gotemp->calibrate.offset = 0.0;
+	gotemp->calibrate.ratio = 1.0;
+
+	snprintf(buff, sizeof(buff), "%s/.gotemprc", getenv("HOME"));
+	inf = fopen(buff, "r");
+	if (inf == NULL) {
+		inf = fopen("/etc/gotemp", "r");
+	}
+
+	if (inf == NULL) {
+		return;
+	}
+
+	while (fgets(buff, sizeof(buff), inf) != NULL) {
+		char *cp;
+
+		cp = strchr(buff, '=');
+		if (cp == NULL) {
+			continue;
+		}
+		*(cp++) = 0;
+		if (strcmp(buff, "calibrate.offset") == 0) {
+			gotemp->calibrate.offset = strtod(cp, NULL);
+		} else if (strcmp(buff, "calibrate.ratio") == 0) {
+			gotemp->calibrate.ratio = strtod(cp, NULL);
+		}
+	}
+
+	fclose(inf);
+}
+
+struct gotemp *gotemp_acquire(int index)
 {
 	struct usb_bus *busses, *bus;
+	struct gotemp *gotemp;
 	int err;
 
 	usb_init();
@@ -57,7 +113,10 @@ struct usb_dev_handle *gotemp_acquire(int index)
 						usb_close(usb);
 						return NULL;
 					}
-					return usb;
+					gotemp = calloc(1, sizeof(*gotemp));
+					gotemp->usb = usb;
+					gotemp_calibrate(gotemp);
+					return gotemp;
 				}
 				index--;
 			}
@@ -67,35 +126,28 @@ struct usb_dev_handle *gotemp_acquire(int index)
 	return NULL;
 }
 
-void gotemp_release(struct usb_dev_handle *usb)
+void gotemp_release(struct gotemp *gotemp)
 {
-	assert(usb != NULL);
+	assert(gotemp != NULL);
+	assert(gotemp->usb != NULL);
 
-	usb_reset(usb);
-	usb_close(usb);
+	usb_reset(gotemp->usb);
+	usb_close(gotemp->usb);
+	free(gotemp);
 }
 
 
-/* This is close to the structure I found in Greg's Code
- * NOTE: This is in little endian format!
- */
-struct packet {
-    unsigned char measurements;
-    unsigned char counter;
-    int16_t measurement0;
-    int16_t measurement1;
-    int16_t measurement2;
-} __attribute__((packed));
-
-int gotemp_read(struct usb_dev_handle *usb, struct packet *pack)
+int gotemp_read(struct gotemp *gotemp, double *temp)
 {
+	/* From the GoIO_SDK */
+	const double conversion = 0.0078125;
 	int len;
 
-	assert(sizeof(*pack) == 8);
+	assert(sizeof(gotemp->packet) == 8);
 
 	do {
-		len = usb_interrupt_read(usb, 0x81, (void *)pack, sizeof(*pack), 100000000);
-		if (len < 0 || len != sizeof(*pack)) {
+		len = usb_interrupt_read(gotemp->usb, 0x81, (void *)&gotemp->packet, sizeof(gotemp->packet), 1000);
+		if (len < 0 || len != sizeof(gotemp->packet)) {
 			if (len == -EAGAIN) {
 				continue;
 			}
@@ -103,6 +155,7 @@ int gotemp_read(struct usb_dev_handle *usb, struct packet *pack)
 		}
 	} while (0);
 
+	*temp = (((double) gotemp->packet.measurement0) * conversion * gotemp->calibrate.ratio) + gotemp->calibrate.offset;
 	return 0;
 }
 
@@ -115,12 +168,10 @@ float CtoF(float C)
 int main(int argc, char **argv)
 {
     struct stat buf;
-    struct packet temp;
-    /* From the GoIO_SDK */
-    float conversion = 0.0078125;
+    double temp;
     int err;
     enum { TEMP_F, TEMP_C } temp_mode = TEMP_F;
-    struct usb_dev_handle *usb;
+    struct gotemp *usb;
 
     if (argc > 1) {
 	if (argc==2 && strcmp(argv[1],"-F")==0) {
@@ -146,10 +197,10 @@ int main(int argc, char **argv)
 
     switch (temp_mode) {
 	case TEMP_F:
-		printf("%.2f\n", CtoF(((float) temp.measurement0) * conversion));
+		printf("%.2f\n", CtoF(temp));
 		break;
         case TEMP_C:
-		printf("%.2f\n", ((float) temp.measurement0) * conversion);
+		printf("%.2f\n", temp);
 		break;
     }
 
