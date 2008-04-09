@@ -8,11 +8,9 @@
 #
 # GPL v2.0
 
-$DOTDIR="$ENV{HOME}/.Aquaria";
-system("mkdir -p \"$DOTDIR\"");
-
-$CONFIG=$DOTDIR."/config";
+$DOTDIR="/etc/Aquaria";
 $SCHEDULE=$DOTDIR."/schedule";
+$ENV{"PATH"} .= ":/opt/Aquaria/bin";
 
 my %Switch;
 my %Schedule;
@@ -21,12 +19,12 @@ my %Threshold;
 sub power_set {
 	my ($label, $state) = @_;
 
-	system("wget --http-user=admin --http-password=1234 -O /dev/null -q \"http://192.168.0.100/outlet?".$Switch{$label}->{'id'}."=".$state."\"");
+	system("curl --user admin:1234 --silent \"http://192.168.0.100/outlet?".$Switch{$label}->{'id'}."=".$state."\" >/dev/null");
 }
 
 
 sub power_config {
-	open(CONF, "wget -O /dev/stdout -q --http-password=1234 --http-user=admin http://192.168.0.100/admin.cgi |") or die "Can't open port to read config!";
+	open(CONF, "curl --user admin:1234 --silent http://192.168.0.100/admin.cgi |") or die "Can't open port to read config!";
 
 	my $id=1;
 	while (<CONF>) {
