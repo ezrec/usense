@@ -1,14 +1,13 @@
 #!/usr/bin/perl
 # Aquarium Power Manager
-# Configuration file is in $HOME/.Aquaria/schedule
-# Run this from cron every 5 minutes or so.
-# Will 'catch up' to the current state even for multi-hour power outages
+# Configuration files are in /etc/Aquaria/schedule
 #
 # Copyright 2007, Jason S. McMullan <jason.mcmullan@gmail.com>
 #
 # GPL v2.0
 
 $DOTDIR="/etc/Aquaria";
+$DOTDIR=".";
 $SCHEDULE=$DOTDIR."/schedule";
 $ENV{"PATH"} .= ":/opt/Aquaria/bin";
 
@@ -17,9 +16,38 @@ my %Schedule;
 my %Threshold;
 
 sub power_set {
-	my ($label, $state) = @_;
+	my ($class, $name, $state, $override) = @_;
 
-	system("curl --user admin:1234 --silent \"http://192.168.0.100/outlet?".$Switch{$label}->{'id'}."=".$state."\" >/dev/null");
+	my $sw = $Switch{$class}->{$name};
+
+	if (!defined $state) {
+		undef $sw->{'override'};
+		return;
+	}
+
+	if (!defined $override && $sw->{'override'} > time) {
+		return;
+	}
+
+	if (defined $override) {
+		$sw->{'override'} = time + $override;
+	} else {
+		undef $sw->{'override'};
+	}
+
+	if ($state eq $sw->{'state'}) {
+		return;
+	}
+
+	system("echo curl --user admin:1234 --silent \"http://192.168.0.100/outlet?".$Switch{$class}->{$name}->{'id'}."=".$state."\"");
+	$sw->{'state'} = $state;
+}
+
+sub power_get {
+	my ($class, $name) = @_;
+
+	return ($Switch{$class}->{$name}->{'state'},
+		$Switch{$class}->{$name}->{'override'});
 }
 
 
@@ -27,10 +55,19 @@ sub power_config {
 	open(CONF, "curl --user admin:1234 --silent http://192.168.0.100/admin.cgi |") or die "Can't open port to read config!";
 
 	my $id=1;
+	my $label;
 	while (<CONF>) {
-		if ($_ =~ /^<td>(.*)<\/td>/) {
-			$Switch{$1} = { 'id'=>$id };
+		if ($_ =~ /^\<td\>(.*)\<\/td\>/) {
+			$label = $1;
+			my ($class,$name) = split(/:/, $label, 2);
+
+			$Switch{$class}->{$name} = { 'id'=>$id };
 			$id++;
+		}
+		if ($_ =~ /^<b><font color=[a-z]*>([A-Z]*)<\/font>/) {
+			my ($class,$name) = split(/:/, $label, 2);
+
+			$Switch{$class}->{$name}->{'state'} = $1;
 		}
 	}
 	close(CONF);
@@ -44,12 +81,15 @@ sub power_config {
 			$state =~ tr/[a-z]/[A-Z]/;
 			my $label = $4;
 
-			if ( ! defined $Switch{$label}->{'id'}) {
+			my ($class,$name) = split(/:/, $label, 2);
+
+			if ( ! defined $Switch{$class}->{$name}->{'id'}) {
 				printf STDERR "Label $label is not defined by the switch!";
 				exit 1;
 			}
 
-			push @{$Schedule{$time}}, { 'label'=>$label, 'state'=>$state};
+			push @{$Schedule{$time}},
+				{ 'class'=>$class, 'name'=>$name, 'state'=>$state};
 		}
 		if ($_ =~ /^Temp\s+([<>=!]+)([0-9.]+)([FC])\s+(On|Off)\s+([^\s]*)\s*$/) {
 			my $condition = $1;
@@ -65,12 +105,14 @@ sub power_config {
 				$temp = (($temp-32) * 5.0/9.0);
 			}
 
-			if ( ! defined $Switch{$label}->{'id'}) {
+			my ($class,$name) = split(/:/, $label, 2);
+
+			if ( ! defined $Switch{$class}->{$name}->{'id'}) {
 				printf STDERR "Label $label is not defined by the switch!";
 				exit 1;
 			}
 
-			push @{$Threshold{$label}}, {'temp'=>$temp, 'condition' => $condition, 'state' => $state };
+			push @{$Threshold{$class}->{$name}}, {'temp'=>$temp, 'condition' => $condition, 'state' => $state };
 		}
 	}
 
@@ -82,70 +124,227 @@ sub schedule_check {
 
 	my $t;
 	my $event;
+	my %switch;
 
 	for ($t = 0; $t <= $end; $t++) {
 		next if (! defined $Schedule{$t} );
 		foreach $event (@{$Schedule{$t}}) {
-			$Switch{$event->{'label'}}->{'state'}=$event->{'state'};
+			$switch{$event->{'class'}}->{$event->{'name'}}->{'state'}=$event->{'state'};
+		}
+	}
+
+	foreach $class (keys %switch) {
+		my $name;
+		foreach $name (keys %{$switch{$class}}) {
+			my $sw = $switch{$class}->{$name};
+			&power_set($class, $name,  $sw->{'state'});
 		}
 	}
 }
 
 sub temp_check {
-	my $label;
+	my $class;
 
 	`gotemp -C`;
 	my $curr_temp=`gotemp -C`;
 
-	foreach $label (keys %Threshold) {
-		foreach $thresh (@{$Threshold{$label}}) {
-			my $cond = $thresh->{'condition'};
-			my $temp = $thresh->{'temp'};
+	foreach $class (keys %Threshold) {
+		my $name;
+		foreach $name (keys %{$Threshold{$class}}) {
+			foreach $thresh (@{$Threshold{$class}->{$name}}) {
+				my $cond = $thresh->{'condition'};
+				my $temp = $thresh->{'temp'};
 
-			my $doit = eval "$curr_temp $cond $temp";
+				my $doit = eval "$curr_temp $cond $temp";
 
-			if ($doit) {
-				&power_set($label, $thresh->{'state'});
+				if ($doit) {
+					&power_set($class, $name, $thresh->{'state'});
+				}
 			}
 		}
 	}
 }
 
-sub power_out {
+my $colon = 0;
 
-	my $label;
+sub timestamp {
+	my $date=`date +"   %m%d%H%M"`;
 
-	foreach $label (keys %Switch) {
-		next if (!defined $Switch{$label}->{'state'});
-		&power_set($label,  $Switch{$label}->{'state'});
+	chomp $date;
+	system("ip-usbph digit \"$date\"");
+	if ($colon) {
+		`ip-usbph symbol colon on`;
+	} else {
+		`ip-usbph symbol colon off`;
+	}
+	$colon ^= 1;
+}
+
+sub show_menu {
+	my ($class, $name) = @_;
+
+	my $title;
+	my $state;
+
+	if ($class eq '') {
+		system("ip-usbph symbol man off");
+		system("ip-usbph symbol up off");
+		system("ip-usbph symbol down off");
+		system("ip-usbph top \"TEMP\"");
+		`ip-usbph symbol decimal on`;
+		my $temp=`gotemp -F`;
+		chomp $temp;
+		$temp = sprintf("%4d", $temp * 10);
+		system("ip-usbph bot \"$temp\"");
+		return;
+	}
+
+	`ip-usbph symbol decimal off`;
+	if ($name eq '') {
+		$title = $class;
+		$title =~ tr/a-z/A-Z/;
+		$title = sprintf("%-5.5s ->", $title);
+		system("ip-usbph symbol man off");
+		system("ip-usbph symbol up off");
+		system("ip-usbph symbol down off");
+		system("ip-usbph top \"$title\"");
+		system("ip-usbph bot \"\"");
+		return;
+	}
+
+	# We have class and name
+	$title = $name;
+	$title =~ tr/a-z/A-Z/;
+	$title = sprintf("*%7.7s", $title);
+	my $override;
+	($state, $override) = &power_get($class, $name);
+	if ($state eq 'ON') {
+		system("ip-usbph symbol up on");
+		system("ip-usbph symbol down off");
+	} else {
+		system("ip-usbph symbol up off");
+		system("ip-usbph symbol down on");
+	}
+
+	system("ip-usbph top \"$title\"");
+	if (defined $override) {
+		$override = sprintf("%4d", $override - time);
+		system("ip-usbph bot \"$override\"");
+		system("ip-usbph symbol man on");
+	} else {
+		system("ip-usbph bot \"\"");
+		system("ip-usbph symbol man off");
 	}
 }
 
+sub handle_key {
+	my ($class, $name, $key) = @_;
+
+	my @classes = sort keys %Switch;
+
+	if ($class eq '') {
+		($class) = @classes;
+		return ($class, $name);
+	} elsif ($name eq '') {
+		if ($key eq 'VOL-') {
+			$class = '';
+		} elsif ($key eq 'VOL+') {
+			($name) = sort keys %{$Switch{$class}};
+		} elsif ($key eq 'DOWN') {
+			my $i;
+			for ($i = 0; $i < @classes; $i++) {
+				if ($classes[$i] eq $class) {
+					$i = ($i + 1) % @classes;
+					$class = $classes[$i];
+					last;
+				}
+			}
+		} elsif ($key eq 'UP') {
+			my $i;
+			for ($i = 0; $i < @classes; $i++) {
+				if ($classes[$i] eq $class) {
+					$i = ($i + $#classes) % @classes;
+					$class = $classes[$i];
+					last;
+				}
+			}
+		}
+		return ($class, $name);
+	}
+
+	my @names = sort keys %{$Switch{$class}};
+
+	if ($key eq 'VOL-') {
+		$name = '';
+	} elsif ($key eq 'DOWN') {
+		my $i;
+		for ($i = 0; $i < @names; $i++) {
+			if ($names[$i] eq $name) {
+				$i = ($i + 1) % @names;
+				$name = $names[$i];
+				last;
+			}
+		}
+	} elsif ($key eq 'UP') {
+		my $i;
+		for ($i = 0; $i < @names; $i++) {
+			if ($names[$i] eq $name) {
+				$i = ($i + $#names) % @names;
+				$name = $names[$i];
+				last;
+			}
+		}
+	} elsif ($key eq 'YES') {
+		&power_set($class, $name, "ON", 15*60);
+	} elsif ($key eq 'NO') {
+		&power_set($class, $name, "OFF", 15*60);
+	} elsif ($key eq 'C') {
+		&power_set($class, $name);
+	}
+
+	return ($class, $name);
+}
+
 sub main {
-	my ($time)=@_;
+	`ip-usbph clear`;
+	`ip-usbph symbol m_and_d on`;
+
+	my $idle;
+	my $class = '';
+	my $name = '';
 
 	# Generate the power port ID configuration
 	&power_config;
 
 	my $NOW_Hour;
 	my $NOW_Min;
+	my $NOW;
 
-	# Run the states
-	if ( "$time" eq "") {
+	while (1) {
+		&timestamp();
+		$key=`ip-usbph key 1000`;
+		chomp $key;
+		if ( $key eq '') {
+			$idle++;
+			if ($idle == 10) {
+				#$class = '';
+				#$name  = '';
+				$idle = 0;
+			}
+		} else {
+			`ip-usbph backlight`;
+			($class, $name) = &handle_key($class, $name, $key);
+		}
+
+		&show_menu($class, $name);
 		$NOW_Hour=`date +%H` + 0;
 		$NOW_Min=`date +%M` + 0;
-	} else {
-		($NOW_Hour, $NOW_Min)=split($time,/:/);
+		$NOW = $NOW_Hour * 60 + $NOW_Min;
+
+		&schedule_check($NOW);
+		&temp_check();
 	}
-
-	my $NOW = $NOW_Hour * 60 + $NOW_Min;
-
-	&schedule_check(23 * 60 + 59);
-	&schedule_check($NOW);
-
-	&temp_check();
-
-	&power_out();
 }
 
-&main(@ARGV)
+&main;
+1;
