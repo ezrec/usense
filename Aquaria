@@ -7,7 +7,6 @@
 # GPL v2.0
 
 $DOTDIR="/etc/Aquaria";
-$DOTDIR=".";
 $SCHEDULE=$DOTDIR."/schedule";
 $ENV{"PATH"} .= ":/opt/Aquaria/bin";
 
@@ -39,7 +38,7 @@ sub power_set {
 		return;
 	}
 
-	system("echo curl --user admin:1234 --silent \"http://192.168.0.100/outlet?".$Switch{$class}->{$name}->{'id'}."=".$state."\"");
+	system("curl --user admin:1234 --silent \"http://192.168.0.100/outlet?".$Switch{$class}->{$name}->{'id'}."=".$state."\" >/dev/null");
 	$sw->{'state'} = $state;
 }
 

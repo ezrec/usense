@@ -8,6 +8,9 @@ Time 18:10 On  Pump:Circulation
 Time 23:50 Off Pump:Circulation
 Time 00:10 On  Pump:Circulation
 
+# Powerhead - always on
+Time 00:00 On  Pump:Powerhead
+
 # Light timing
 Time 12:00 On  Light:Dawn
 Time 13:00 On  Light:Morning
@@ -24,17 +27,17 @@ Time 12:00 Off Light:Refugium
 #Time 00:00 On  Light:Refugium
 
 # Temperature Controls - 77-80F range
-#Temp <77F On Temp:Hotter
-#Temp >78F Off Temp:Hotter
-#
-#Temp >80F On Temp:Cooler
-#Temp <79F Off Temp:Cooler
+Temp <77F On Temp:Hotter
+Temp >78F Off Temp:Hotter
+
+Temp >80F On Temp:Cooler
+Temp <79F Off Temp:Cooler
 
 
 # Temperature Controls - 72-75F range
-Temp <72F On Temp:Hotter
-Temp >73F Off Temp:Hotter
-
-Temp >75F On Temp:Cooler
-Temp <74F Off Temp:Cooler
+#Temp <72F On Temp:Hotter
+#Temp >73F Off Temp:Hotter
+#
+#Temp >75F On Temp:Cooler
+#Temp <74F Off Temp:Cooler
 
