@@ -5,6 +5,7 @@
 # Copyright 2007, Jason S. McMullan <jason.mcmullan@gmail.com>
 #
 # GPL v2.0
+#
 
 $DOTDIR="/etc/Aquaria";
 $SCHEDULE=$DOTDIR."/schedule";
@@ -170,11 +171,11 @@ sub timestamp {
 	my $date=`date +"   %m%d%H%M"`;
 
 	chomp $date;
-	system("ip-usbph digit \"$date\"");
+	&ip_usbph("digit \"$date\"");
 	if ($colon) {
-		`ip-usbph symbol colon on`;
+		&ip_usbph("symbol colon on");
 	} else {
-		`ip-usbph symbol colon off`;
+		&ip_usbph("symbol colon off");
 	}
 	$colon ^= 1;
 }
@@ -186,28 +187,28 @@ sub show_menu {
 	my $state;
 
 	if ($class eq '') {
-		system("ip-usbph symbol man off");
-		system("ip-usbph symbol up off");
-		system("ip-usbph symbol down off");
-		system("ip-usbph top \"TEMP\"");
-		`ip-usbph symbol decimal on`;
+		&ip_usbph("symbol man off");
+		&ip_usbph("symbol up off");
+		&ip_usbph("symbol down off");
+		&ip_usbph("top \"TEMP\"");
+		&ip_usbph("symbol decimal on");
 		my $temp=`gotemp -F`;
 		chomp $temp;
 		$temp = sprintf("%4d", $temp * 10);
-		system("ip-usbph bot \"$temp\"");
+		&ip_usbph("bot \"$temp\"");
 		return;
 	}
 
-	`ip-usbph symbol decimal off`;
+	&ip_usbph("symbol decimal off");
 	if ($name eq '') {
 		$title = $class;
 		$title =~ tr/a-z/A-Z/;
 		$title = sprintf("%-5.5s ->", $title);
-		system("ip-usbph symbol man off");
-		system("ip-usbph symbol up off");
-		system("ip-usbph symbol down off");
-		system("ip-usbph top \"$title\"");
-		system("ip-usbph bot \"\"");
+		&ip_usbph("symbol man off");
+		&ip_usbph("symbol up off");
+		&ip_usbph("symbol down off");
+		&ip_usbph("top \"$title\"");
+		&ip_usbph("bot \"\"");
 		return;
 	}
 
@@ -218,21 +219,21 @@ sub show_menu {
 	my $override;
 	($state, $override) = &power_get($class, $name);
 	if ($state eq 'ON') {
-		system("ip-usbph symbol up on");
-		system("ip-usbph symbol down off");
+		&ip_usbph("symbol up on");
+		&ip_usbph("symbol down off");
 	} else {
-		system("ip-usbph symbol up off");
-		system("ip-usbph symbol down on");
+		&ip_usbph("symbol up off");
+		&ip_usbph("symbol down on");
 	}
 
-	system("ip-usbph top \"$title\"");
+	&ip_usbph("top \"$title\"");
 	if (defined $override) {
 		$override = sprintf("%4d", $override - time);
-		system("ip-usbph bot \"$override\"");
-		system("ip-usbph symbol man on");
+		&ip_usbph("bot \"$override\"");
+		&ip_usbph("symbol man on");
 	} else {
-		system("ip-usbph bot \"\"");
-		system("ip-usbph symbol man off");
+		&ip_usbph("bot \"\"");
+		&ip_usbph("symbol man off");
 	}
 }
 
@@ -304,9 +305,34 @@ sub handle_key {
 	return ($class, $name);
 }
 
+sub ip_usbph_init {
+	`mkfifo /tmp/ip-usbph.get`;
+
+	open(IP_USBPH_CMD, "| ip-usbph pipe >/tmp/ip-usbph.get") or die "ip-usbph: $?";
+	open(IP_USBPH_GET, "< /tmp/ip-usbph.get") or die "/tmp/ip-usbph.get: $?";
+
+	my $fd = select(IP_USBPH_CMD);
+	$| = 1;
+	select($fd);
+}
+
+sub ip_usbph {
+	my ($cmd) = @_;
+	print IP_USBPH_CMD $cmd."\n";
+}
+
+sub ip_usbph_get {
+	my ($cmd) = @_;
+	&ip_usbph($cmd);
+	$get = <IP_USBPH_GET>;
+	chomp $get;
+	return $get;
+}
+
 sub main {
-	`ip-usbph clear`;
-	`ip-usbph symbol m_and_d on`;
+	&ip_usbph_init;
+	&ip_usbph("clear");
+	&ip_usbph("symbol m_and_d on");
 
 	my $idle;
 	my $class = '';
@@ -321,7 +347,7 @@ sub main {
 
 	while (1) {
 		&timestamp();
-		$key=`ip-usbph key 1000`;
+		$key=&ip_usbph_get("key 1000");
 		chomp $key;
 		if ( $key eq '') {
 			$idle++;
@@ -331,7 +357,7 @@ sub main {
 				$idle = 0;
 			}
 		} else {
-			`ip-usbph backlight`;
+			&ip_usbph("backlight");
 			($class, $name) = &handle_key($class, $name, $key);
 		}
 

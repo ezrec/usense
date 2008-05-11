@@ -10,8 +10,8 @@ all: gotemp Aquaria
 
 install: all
 	mkdir -p /etc/Aquaria
-	cp gotemp $(INSTALL_PATH)/bin/gotemp
 	cp Aquaria $(INSTALL_PATH)/bin/Aquaria
+	cp gotemp $(INSTALL_PATH)/bin/gotemp
 
 gotemp: gotemp.c
 	$(CC) -o gotemp gotemp.c -lusb
