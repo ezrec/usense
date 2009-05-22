@@ -1,43 +1,45 @@
 # Circulation pump, simulating tide changes every 6 hours
-Time 05:50 Off Pump:Circulation
-Time 06:10 On  Pump:Circulation
-Time 11:50 Off Pump:Circulation
-Time 12:10 On  Pump:Circulation
-Time 17:50 Off Pump:Circulation
-Time 18:10 On  Pump:Circulation
-Time 23:50 Off Pump:Circulation
-Time 00:10 On  Pump:Circulation
+Device Pump:Circulation
+	On Always
+	Off Time 05:50 for 0:20
+	Off Time 11:50 for 0:20
+	Off Time 17:50 for 0:20
+	Off Time 23:50 for 0:20
 
 # Powerhead - always on
-Time 00:00 On  Pump:Powerhead
+Device Pump:Powerhead
+	On Always
+	Off Time 05:50 for 0:20
+	Off Time 11:50 for 0:20
+	Off Time 17:50 for 0:20
+	Off Time 23:50 for 0:20
 
 # Light timing
-Time 12:00 On  Light:Dawn
-Time 13:00 On  Light:Morning
-Time 15:00 On  Light:Full
-Time 21:00 Off Light:Full
-Time 23:00 Off Light:Morning
-Time 00:00 Off Light:Dawn
+Device Light:Dawn
+	On Time 12:00 for 12:00
+#	Off Always
 
-# Refugium light timing (12 hour cycle)
-Time 00:00 On  Light:Refugium
-Time 12:00 Off Light:Refugium
+Device Light:Morning
+	On Time 14:00 for 8:00
+#	Off Always
 
-# Refugium light timing (24 hour continuous)
-#Time 00:00 On  Light:Refugium
+Device Light:Full
+	On Time 16:00 for 4:00
+#	Off Always
 
-# Temperature Controls - 77-80F range
-Temp <77F On Temp:Hotter
-Temp >78F Off Temp:Hotter
-
-Temp >80F On Temp:Cooler
-Temp <79F Off Temp:Cooler
+Device Light:Refugium
+	# Refugium light timing (12 hour cycle)
+	On Time 00:00 for 12:00
+	# Refugium light timing (24 hour continuous)
+#	Off Always
 
 
-# Temperature Controls - 72-75F range
-#Temp <72F On Temp:Hotter
-#Temp >73F Off Temp:Hotter
-#
-#Temp >75F On Temp:Cooler
-#Temp <74F Off Temp:Cooler
+# Temperature Controls - 80-85F range
+# NOTE: Tank temp is -6F from refugium temp in winter!
+Device Temp:Hotter
+	On Temp <79F
+	Off Temp >82F
 
+Device Temp:Cooler
+	On Temp >85F
+	Off Temp <83F
