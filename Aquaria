@@ -69,11 +69,6 @@ sub power_config {
 			$Switch{$class}->{$name} = { 'id'=>$id };
 			$id++;
 		}
-		if ($_ =~ /^<b><font color=[a-z]*>([A-Z]*)<\/font>/) {
-			my ($class,$name) = split(/:/, $label, 2);
-
-			$Switch{$class}->{$name}->{'state'} = $1;
-		}
 	}
 	close(CONF);
 }
