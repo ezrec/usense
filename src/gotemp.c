@@ -167,7 +167,6 @@ float CtoF(float C)
 
 int main(int argc, char **argv)
 {
-    struct stat buf;
     double temp;
     int err;
     enum { TEMP_F, TEMP_C } temp_mode = TEMP_F;
