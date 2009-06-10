@@ -1,7 +1,6 @@
 
 
-bin_PROGRAMS = aquaria gotemp TEMPer
-aquaria_SOURCES = aquaria.c
+bin_PROGRAMS = gotemp TEMPer
 
 gotemp_SOURCES = gotemp.c
 
