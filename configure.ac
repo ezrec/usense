@@ -11,10 +11,9 @@ AC_PROG_CC
 
 # Checks for libraries.
 AC_CHECK_LIB([usb], [usb_init])
-AC_CHECK_LIB([ip-usbph], [ip_usbph_init])
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h stdlib.h string.h strings.h syslog.h unistd.h ip-usbph.h])
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h strings.h syslog.h unistd.h usb.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_INT16_T
