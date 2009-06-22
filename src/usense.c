@@ -211,7 +211,7 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 			continue;
 		}
 
-		snprintf(name, sizeof(name), "usb:%d.%d", dev->bus->location, dev->devnum);
+		snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
 		udev = usense_device_new(usense, name, dev_probe[i], usb);
 		err = dev_probe[i]->probe.usb.attach(udev, usb, &udev->priv);
 		if (err < 0) {
@@ -227,7 +227,7 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 
 static int usb_is_initted = 0;
 
-static struct usb_device *usb_find(int bus_id, int dev_id)
+static struct usb_device *usb_find(const char *bus_name, int dev_id)
 {
 	struct usb_bus *busses, *bus;
 
@@ -244,7 +244,7 @@ static struct usb_device *usb_find(int bus_id, int dev_id)
 	for (bus = busses; bus != NULL; bus = bus->next) {
 		struct usb_device *dev;
 
-		if (bus->location != bus_id)
+		if (strcmp(bus->dirname, bus_name) != 0)
 			continue;
 
 		for (dev = bus->devices; dev != NULL; dev = dev->next) {
@@ -315,14 +315,18 @@ struct usense_device *usense_open(const char *device_name)
 
 	if (strncmp(device_name, "usb:", 4) == 0) {
 		struct usb_device *udev;
-		int err, bus_no, dev_no, len;
+		int err, dev_no, len;
+		char bus_name[256];
 
-		err = sscanf(device_name,"usb:%d.%d%n", &bus_no, &dev_no, &len);
+		err = sscanf(device_name,"usb:%256[^.].%d%n", bus_name, &dev_no, &len);
 		if (err != 2 || len != strlen(device_name)) {
 			return NULL;
 		}
 
-		udev = usb_find(bus_no, dev_no);
+		udev = usb_find(bus_name, dev_no);
+		if (udev == NULL)
+			return NULL;
+
 		return usense_probe_usb(usense, udev);
 	}
 
