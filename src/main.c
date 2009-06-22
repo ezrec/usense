@@ -50,6 +50,7 @@ int list_device_props(const char *dev_name)
 
 	dev = usense_open(dev_name);
 	if (dev == NULL) {
+		fprintf(stderr, "%s: No such sensor\n", dev_name);
 		return EXIT_FAILURE;
 	}
 
@@ -72,11 +73,13 @@ int show_device_prop(const char *dev_name, const char *prop_name)
 
 	dev = usense_open(dev_name);
 	if (dev == NULL) {
+		fprintf(stderr, "%s: No such sensor\n", dev_name);
 		return EXIT_FAILURE;
 	}
 
 	err = usense_prop_get(dev, prop_name, value, sizeof(value));
 	if (err < 0) {
+		fprintf(stderr, "%s: No such property \"%s\"\n", dev_name, prop_name);
 		return EXIT_FAILURE;
 	}
 	printf("%s\n", value);
@@ -91,11 +94,13 @@ int set_device_prop(const char *dev_name, const char *prop_name, const char *val
 
 	dev = usense_open(dev_name);
 	if (dev == NULL) {
+		fprintf(stderr, "%s: No such sensor\n", dev_name);
 		return EXIT_FAILURE;
 	}
 
 	err = usense_prop_set(dev, prop_name, value);
 	if (err < 0) {
+		fprintf(stderr, "%s: Can't set property \"%s\"\n", dev_name, prop_name);
 		return EXIT_FAILURE;
 	}
 
