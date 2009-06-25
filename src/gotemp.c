@@ -75,7 +75,7 @@ int gotemp_update(struct usense_device *dev, void *priv)
 	/* From the GoIO_SDK */
 	const double conversion = 0.0078125;
 	struct gotemp *gotemp = priv;
-	uint64_t mkelvin;
+	double kelvin;
 	char buff[64];
 	int len;
 
@@ -91,8 +91,8 @@ int gotemp_update(struct usense_device *dev, void *priv)
 		}
 	} while (0);
 
-	mkelvin = (uint64_t)(C_TO_K((((double) gotemp->packet.measurement0) * conversion * gotemp->calibrate.mult) + gotemp->calibrate.add) * 1000000);
-	snprintf(buff, sizeof(buff), "%llu", (unsigned long long)mkelvin);
+	kelvin = C_TO_K((((double) gotemp->packet.measurement0) * conversion * gotemp->calibrate.mult) + gotemp->calibrate.add);
+	snprintf(buff, sizeof(buff), "%g", kelvin);
 	return usense_prop_set(dev, "reading", buff);
 }
 
@@ -118,6 +118,9 @@ static int gotemp_attach(struct usense_device *dev, struct usb_dev_handle *usb, 
 		gotemp_release(gotemp);
 		return err;
 	}
+
+	*priv = gotemp;
+	return 0;
 }
 
 static int gotemp_match(struct usb_device_descriptor *desc)

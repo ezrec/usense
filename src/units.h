@@ -22,7 +22,9 @@
 #define UNITS_H
 
 #define C_TO_K(x)	((x) + 273.15)
+#define K_TO_C(x)	((x) - 273.15)
+
 #define C_TO_F(x)	((x) * 9.0 / 5.0 + 32)
-#define K_TO_F(x)	(((x) - 273.15) * 9.0 / 5.0 + 32)
+#define K_TO_F(x)	C_TO_F(K_TO_C(x))
 
 #endif /* UNITS_H */

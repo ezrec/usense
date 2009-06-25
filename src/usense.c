@@ -27,11 +27,26 @@
 #include <usb.h>
 
 #include "usense.h"
+#include "units.h"
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x)	(sizeof(x)/sizeof(x[0]))
+#endif
 
 struct usense_prop {
 	const char *key;
 	char *value;
 };
+
+/* Powers of 10 from 10^-16 to 10^15 */
+#define USENSE_UNITS_of(x)		((x) & ~0x1f)
+#define USENSE_UNITS_POW_10(x)		((uint32_t)(x) & 0x1f)
+#define USENSE_UNITS_POW_10_of(x)	(((x) & 0x10) ? (-16+(int)((x) & 0xf)) : ((x) & 0xf))
+
+#define USENSE_UNITS_UNITLESS		(1 << 5)	/* For counters */
+#define USENSE_UNITS_CELSIUS		(2 << 5)
+#define USENSE_UNITS_KELVIN		(3 << 5)
+#define USENSE_UNITS_FAHRENHEIT		(4 << 5)
 
 struct usense_device {
 	struct usense_device *next, **pprev;
@@ -182,6 +197,50 @@ static void usense_device_free(struct usense_device *dev)
 	free(dev->prop);
 	free(dev->name);
 	free(dev);
+}
+
+static uint32_t units_is_valid(const char *type, const char *value)
+{
+	const struct {
+		const char *type;
+		const struct valid_map {
+			const char *name;
+			int unit;
+		} *map;
+	} valid[] = {
+		{ .type = "temp",
+		  .map = (const struct valid_map []){
+		          { "C", USENSE_UNITS_CELSIUS },
+		          { "Celsius", USENSE_UNITS_CELSIUS },
+		          { "K", USENSE_UNITS_KELVIN },
+	                  { "Kelvin", USENSE_UNITS_KELVIN },
+	                  { "F", USENSE_UNITS_FAHRENHEIT },
+	                  { "Fahrenheit", USENSE_UNITS_FAHRENHEIT },
+	                  { NULL, 0 } } } };
+	int i;
+	uint32_t unit = USENSE_UNITS_POW_10(0);
+
+	switch (value[0]) {
+	case 'm': unit = USENSE_UNITS_POW_10(-3); value++; break;
+	case 'u': unit = USENSE_UNITS_POW_10(-6); value++; break;
+	case 'n': unit = USENSE_UNITS_POW_10(-9); value++; break;
+	default:
+		  break;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(valid); i++) {
+		if (strcmp(type, valid[i].type) == 0) {
+			int j;
+			for (j = 0; valid[i].map[j].name != NULL; j++) {
+				if (strcmp(value, valid[i].map[j].name) == 0) {
+					return unit | valid[i].map[j].unit;
+				}
+			}
+		}
+	}
+
+	/* Failed to match */
+	return 0;
 }
 
 static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_device *dev)
@@ -346,12 +405,69 @@ const char *usense_device_name(struct usense_device *dev)
 	return dev->name;
 }
 
+/* We know 'power' can only be from -16 to 15,
+ * so we use this instead of having to link in the
+ * full -lm math library.
+ */
+static inline double power10(int power)
+{
+	double x = 1.0;
+	while (power < 0) {
+		x /= 10.0;
+		power++;
+	}
+	while (power > 0) {
+		x *= 10.0;
+		power--;
+	}
+
+	return x;
+}
+
+
+static void convert_reading(struct usense_device *dev, const char *val, char *buff, size_t len)
+{
+	uint32_t units;
+	char ubuff[USENSE_PROP_MAX];
+	char tbuff[USENSE_PROP_MAX];
+	int err,n;
+	double d;
+
+	err = sscanf(val, "%lg%n", &d, &n);
+	if (err != 1 || n != strlen(val)) {
+		/* Evidently the device knows better than we do.
+		 */
+		strncpy(buff, val, len);
+		return;
+	}
+
+	err = usense_prop_get(dev, "type", tbuff, sizeof(tbuff));
+	assert(err > 0);
+
+	err = usense_prop_get(dev, "units", ubuff, sizeof(ubuff));
+	assert(err > 0);
+
+	units = units_is_valid(tbuff, ubuff);
+	assert(units != 0);
+
+	switch (USENSE_UNITS_of(units)) {
+	case USENSE_UNITS_KELVIN:     break;	/* Kelvin is temp native */
+	case USENSE_UNITS_CELSIUS:    d = K_TO_C(d); break;
+	case USENSE_UNITS_FAHRENHEIT: d = K_TO_F(d); break;
+	default:
+		assert(USENSE_UNITS_of(units) == USENSE_UNITS_UNITLESS );
+		break;
+	}
+
+	n = USENSE_UNITS_POW_10_of(units);
+	d *= power10(n);
+
+	snprintf(buff, len, "%g", d);
+}
+
 
 /* Get property from device
  * (always returns in UTF8z format)
- *
- * The only 'guaranteed' to exists property is "reading", which is returned in
- * microkelvin units.
  */
 int usense_prop_get(struct usense_device *dev, const char *key, char *buff, size_t len)
 {
@@ -364,17 +480,44 @@ int usense_prop_get(struct usense_device *dev, const char *key, char *buff, size
 		return -ENOENT;
 	}
 
-	strncpy(buff, prop->value, len);
-	if (len > 0) {
-		buff[len - 1] = 0;
+	if (len < 1) {
+		return 0;
 	}
 
-	return 0;
+	if (strcmp(key, "reading") == 0) {
+		dev->probe->update(dev, dev->priv);
+		convert_reading(dev, prop->value, buff, len);
+	} else {
+		strncpy(buff, prop->value, len);
+	}
+	buff[len - 1] = 0;
+
+	return strlen(buff);
 }
 
 int usense_prop_set(struct usense_device *dev, const char *key, const char *value)
 {
 	struct usense_prop *prop, match;
+
+	if (key == NULL || value == NULL || strlen(value) >= USENSE_PROP_MAX) {
+		return -EINVAL;
+	}
+
+	/* If it's 'units', validate it.
+	 */
+	if (strcmp(key,"units") == 0) {
+		int err;
+		uint32_t units;
+		char buff[USENSE_PROP_MAX];
+
+		err = usense_prop_get(dev, "type", buff, sizeof(buff));
+		assert(err > 0);
+
+		units = units_is_valid(buff, value);
+		if (units == 0) {
+			return -EINVAL;
+		}
+	}
 
 	match.key = key;
 	prop = bsearch(&match, dev->prop, dev->props, sizeof(*prop), usense_prop_cmp);

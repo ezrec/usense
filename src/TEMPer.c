@@ -153,9 +153,8 @@ static int TEMPer_update(struct usense_device *dev, void *priv)
 	} else {
 		/* microKelvin */
 		char buff[48];
-		double celsius = temp / 256.0;
-		uint64_t mkelvin = (uint64_t)(C_TO_K(celsius) * 1000000);
-		snprintf(buff, sizeof(buff), "%llu", (unsigned long long)mkelvin);
+		double kelvin = C_TO_K(temp / 256.0);
+		snprintf(buff, sizeof(buff), "%g", kelvin);
 		usense_prop_set(dev, "reading", buff);
 	}
 

@@ -26,6 +26,8 @@
 struct usense;
 struct usense_device;
 
+#define USENSE_PROP_MAX		256	/* Maximum property length, including ASCIIz */
+
 struct usense_probe {
 	enum {
 		USENSE_PROBE_INVALID=0,
@@ -55,7 +57,15 @@ struct usense_probe {
 	/* Free private data */
 	void (*release)(void *priv);
 
-	/* Update the usense_device */
+	/* Update the device properties
+	 *
+	 * NOTE: Each device 'type' has a native reading units.
+	 *       temp  -> Kelvin
+	 *
+	 * Therefore, when updating "reading", it must report in Kelvin.
+	 * Use the '%g' format string.
+	 * The 'usense_prop_get()' remaps the reading for the user.
+	 */
 	int (*update)(struct usense_device *dev, void *priv);
 };
 
