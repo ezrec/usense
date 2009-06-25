@@ -1,10 +1,16 @@
 
+include_HEADERS = usense.h
 
-bin_PROGRAMS = gotemp TEMPer
+bin_PROGRAMS = usense
 
-gotemp_SOURCES = gotemp.c
+usense_SOURCES = main.c
+usense_LDADD = libusense.la
 
-TEMPer_SOURCES = \
+lib_LTLIBRARIES = libusense.la
+
+libusense_la_SOURCES = \
+		usense.h usense.c \
+		gotemp.c \
 		TEMPer.c \
 		ch341.c ch341.h \
 		i2c-algo-bit.c i2c-algo-bit.h i2c.h

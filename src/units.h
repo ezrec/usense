@@ -18,37 +18,11 @@
  *
  */
 
-#ifndef CH341_H
-#define CH341_H
+#ifndef UNITS_H
+#define UNITS_H
 
-#include <termios.h>
+#define C_TO_K(x)	((x) + 273.15)
+#define C_TO_F(x)	((x) * 9.0 / 5.0 + 32)
+#define K_TO_F(x)	(((x) - 273.15) * 9.0 / 5.0 + 32)
 
-#ifndef TIOCM_LE
-/* modem lines  - stolen from Linux asm/termios.h */
-#define TIOCM_LE	0x001
-#define TIOCM_DTR	0x002
-#define TIOCM_RTS	0x004
-#define TIOCM_ST	0x008
-#define TIOCM_SR	0x010
-#define TIOCM_CTS	0x020
-#define TIOCM_CAR	0x040
-#define TIOCM_RNG	0x080
-#define TIOCM_DSR	0x100
-#define TIOCM_CD	TIOCM_CAR
-#define TIOCM_RI	TIOCM_RNG
-#define TIOCM_OUT1	0x2000
-#define TIOCM_OUT2	0x4000
-#define TIOCM_LOOP	0x8000
-#endif
-
-struct ch341;
-
-struct ch341 *ch341_open(struct usb_dev_handle *usb);
-void ch341_close(struct ch341 *priv);
-
-void ch341_set_termios(struct ch341 *priv, struct termios *termios, struct termios *old_termios);
-
-int ch341_tiocmset(struct ch341 *priv, unsigned int val);
-int ch341_tiocmget(struct ch341 *priv);
-
-#endif /* CH341_H */
+#endif /* UNITS_H */

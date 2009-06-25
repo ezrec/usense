@@ -21,10 +21,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+
+#include "usense.h"
+#include "units.h"
 
 #include "ch341.h"
 #include "i2c.h"
 #include "i2c-algo-bit.h"
+
+struct temper {
+	struct ch341 *ch;
+	struct i2c_adapter adap;
+	struct i2c_algo_bit_data i2c_bit;
+};
 
 static void temper_setsda(void *data, int state)
 {
@@ -129,61 +139,108 @@ static int temp_read(struct i2c_adapter *adap, int reg, int16_t *val)
 	return err;
 }
 
-int main(int argc, char **argv)
+static int TEMPer_update(struct usense_device *dev, void *priv)
+{
+	int16_t temp;
+	struct temper *temper = priv;
+	int err;
+
+	/* Dump temp */
+	err = temp_read(&temper->adap, REG_TEMP, &temp);
+	if (err < 0) {
+		fprintf(stderr, "%s: Can't read temperature\n", usense_device_name(dev));
+		return -EINVAL;
+	} else {
+		/* microKelvin */
+		char buff[48];
+		double celsius = temp / 256.0;
+		uint64_t mkelvin = (uint64_t)(C_TO_K(celsius) * 1000000);
+		snprintf(buff, sizeof(buff), "%llu", (unsigned long long)mkelvin);
+		usense_prop_set(dev, "reading", buff);
+	}
+
+	return 0;
+}
+
+static int TEMPer_attach(struct usense_device *dev, struct usb_dev_handle *usb, void **priv)
 {
 	/* Connect to ch341 */
 	int err;
+	struct temper *temper;
 	struct ch341 *ch;
-	struct i2c_adapter adap;
-	struct i2c_algo_bit_data i2c_bit;
 	uint8_t cfg;
 	int16_t temp;
 
-	ch = ch341_open(0);
+	ch = ch341_open(usb);
 	if (ch == NULL) {
-		return EXIT_FAILURE;
+		return -ENODEV;
 	}
 
-	i2c_bit.data = ch;
-	i2c_bit.setsda = temper_setsda;
-	i2c_bit.setscl = temper_setscl;
-	i2c_bit.getsda = temper_getsda;
-	i2c_bit.getscl = NULL;
-	i2c_bit.udelay = 50;	/* in ms */
-	i2c_bit.timeout = 1000;	/* in ms */
+	temper = calloc(1, sizeof(*temper));
+	temper->ch = ch;
 
-	adap.timeout = 1000;
-	adap.retries = 3;
-	strncpy(&adap.name[0], "ch341-i2c", sizeof(adap.name));
-	adap.algo_data = &i2c_bit;
-	i2c_bit_add_bus(&adap);
+	temper->i2c_bit.data = ch;
+	temper->i2c_bit.setsda = temper_setsda;
+	temper->i2c_bit.setscl = temper_setscl;
+	temper->i2c_bit.getsda = temper_getsda;
+	temper->i2c_bit.getscl = NULL;
+	temper->i2c_bit.udelay = 50;	/* in ms */
+	temper->i2c_bit.timeout = 1000;	/* in ms */
+
+	temper->adap.timeout = 1000;
+	temper->adap.retries = 3;
+	strncpy(&temper->adap.name[0], "ch341-i2c", sizeof(temper->adap.name));
+	temper->adap.algo_data = &temper->i2c_bit;
+	i2c_bit_add_bus(&temper->adap);
 
 	/* Read config */
 	cfg = 0;
-	err = temp_cfg_read(&adap, &cfg);
+	err = temp_cfg_read(&temper->adap, &cfg);
 	if (err < 0) {
-		fprintf(stderr, "%s: Can't get current configuration.\n", argv[0]);
+		fprintf(stderr, "%s: Can't get current configuration.\n", usense_device_name(dev));
+		ch341_close(ch);
+		return -EINVAL;
 	}
 
 	if (cfg != 0x60) {
-		err = temp_cfg_write(&adap, 0x60);
+		err = temp_cfg_write(&temper->adap, 0x60);
 	}
 	if (err < 0) {
-		fprintf(stderr, "%s: Can't configure 12bit resolution\n", argv[0]);
-	}
-
-	/* Dump temps */
-	err = temp_read(&adap, REG_TEMP, &temp);
-	if (err < 0) {
-		fprintf(stderr, "%s: Can't read temperator\n", argv[0]);
+		fprintf(stderr, "%s: Can't configure 12bit resolution\n", usense_device_name(dev));
+		ch341_close(ch);
+		return -EINVAL;
 	} else {
-		/* Gotemp style */
-		double celsius = temp / 256.0;
-		printf("%f\n", celsius);
+		usense_prop_set(dev, "resolution","12");
 	}
 
+	TEMPer_update(dev, temper);
 
-	ch341_close(ch);
+	*priv = temper;
 
-	return EXIT_SUCCESS;
+	return 0;
 }
+
+static void TEMPer_release(void *priv)
+{
+	struct temper *temper = priv;
+
+	ch341_close(temper->ch);
+	free(temper);
+}
+
+static int TEMPer_match(struct usb_device_descriptor *desc)
+{
+	return (desc->idVendor == 0x4348 &&
+		desc->idProduct == 0x5523 &&
+		desc->iManufacturer == 0 &&
+		desc->iProduct == 2 &&
+		desc->iSerialNumber == 0 &&
+		desc->bNumConfigurations == 1);
+}
+
+const struct usense_probe _usense_probe_TEMPer = {
+	.type = USENSE_PROBE_USB,
+	.probe = { .usb = { .match = TEMPer_match, .attach = TEMPer_attach, } },
+	.release = TEMPer_release,
+	.update = TEMPer_update,
+};

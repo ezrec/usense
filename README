@@ -22,3 +22,37 @@ support files. From there, just run:
  $ ./configure
  $ make
  $ sudo make install
+
+Using
+-----
+
+ $ usense
+ Usage:
+
+ $ usense
+ usb:3.1
+ usb:3.2
+ usb:4.1
+ $ usense usb:3.2
+ device=usb:3.2
+ reading=27.4
+ vendor=Vernier
+ device=Go!Temp
+ calibration.mult=1.002
+ calibration.add=-0.05
+ $ usense 3.2 reading
+ 27.4
+
+Configuration
+-------------
+
+ $ usense usb:3.2
+ device=usb:3.2
+ reading=27.4
+ vendor=Vernier
+ device=Go!Temp
+ calibration.mult=1.002
+ calibration.add=-0.05
+ $ usense usb:3.2 calibration.mult 1.003
+ $ usense usb:3.2 calibration.mult
+ calibration.mult=1.003

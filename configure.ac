@@ -5,9 +5,11 @@ AC_PREREQ([2.63])
 AC_INIT([Aquaria], [0.2], [jason.mcmullan@gmail.com])
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIR([m4])
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_LIB([usb], [usb_init])

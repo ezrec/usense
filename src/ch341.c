@@ -207,59 +207,17 @@ out:
 	return r;
 }
 
-static struct ch341 *ch341_acquire(int index)
+static struct ch341 *ch341_acquire(struct usb_dev_handle *usb)
 {
-	struct usb_bus *busses, *bus;
 	struct ch341 *priv;
-	int err;
 
-	usb_init();
-	usb_find_busses();
-	usb_find_devices();
-
-	busses = usb_get_busses();
-
-	for (bus = busses; bus != NULL; bus = bus->next) {
-		struct usb_device *dev;
-		struct usb_dev_handle *usb;
-		for (dev = bus->devices; dev != NULL; dev = dev->next) {
-			if (dev->descriptor.idVendor == 0x4348 &&
-				dev->descriptor.idProduct == 0x5523 &&
-				dev->descriptor.iManufacturer == 0 &&
-				dev->descriptor.iProduct == 2 &&
-				dev->descriptor.iSerialNumber == 0 &&
-				dev->descriptor.bNumConfigurations == 1) {
-
-				usb = usb_open(dev);
-				if (usb == NULL) {
-					fprintf(stderr, "Can't open device: %s\n", usb_strerror());
-					continue;
-				}
-				if (index <= 0) {
-					err = usb_clear_halt(usb, 0);
-					err = usb_detach_kernel_driver_np(usb, 0);
-					err = usb_claim_interface(usb, 0);
-					if (err < 0) {
-						fprintf(stderr, "Can't claim device: %s\n", usb_strerror());
-						usb_close(usb);
-						return NULL;
-					}
-					priv = calloc(1, sizeof(*priv));
-					priv->dev = usb;
-					return priv;
-				}
-				index--;
-			}
-		}
-	}
-
-	return NULL;
+	priv = calloc(1, sizeof(*priv));
+	priv->dev = usb;
+	return priv;
 }
 
 static void ch341_release(struct ch341 *priv)
 {
-	usb_reset(priv->dev);
-	usb_close(priv->dev);
 	free(priv);
 }
 
@@ -273,12 +231,12 @@ void ch341_close(struct ch341 *priv)
 
 
 /* open this device, set default parameters */
-struct ch341 *ch341_open(int id)
+struct ch341 *ch341_open(struct usb_dev_handle *usb)
 {
 	struct ch341 *priv;
 	int r;
 
-	priv = ch341_acquire(id);
+	priv = ch341_acquire(usb);
 	if (priv == NULL) {
 		return NULL;
 	}

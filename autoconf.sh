@@ -6,7 +6,8 @@
 # Re-generate the automake and autoconf files
 # Useful when checking out from the git repo.
 
-aclocal
+libtoolize -i
+aclocal -I m4
 autoheader
 automake --add-missing --foreign
 autoconf
