@@ -630,6 +630,7 @@ int usense_prop_set(struct usense_device *dev, const char *key, const char *valu
 		prop = &dev->prop[dev->props++];
 		prop->key = strdup(key);
 		prop->value = strdup(value);
+		qsort(dev->prop, dev->props, sizeof(*prop), usense_prop_cmp);
 		return 1;
 	}
 
