@@ -67,6 +67,12 @@ struct usense_probe {
 	 * The 'usense_prop_get()' remaps the reading for the user.
 	 */
 	int (*update)(struct usense_device *dev, void *priv);
+
+	/* Optional: Validate before setting
+	 *
+	 * Return >= 0 if 'value' is valid, -1 if not.
+	 */
+	int (*on_prop_set)(struct usense_device *dev, void *priv, const char *prop, const char *val);
 };
 
 /* Register devices to look for

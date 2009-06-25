@@ -50,6 +50,7 @@ struct usense_prop {
 
 struct usense_device {
 	struct usense_device *next, **pprev;
+	enum { USENSE_MODE_READ, USENSE_MODE_UPDATE } mode;
 	char *name;
 	const struct usense_probe *probe;
 	void *priv;
@@ -160,6 +161,7 @@ static struct usense_device *usense_device_new(struct usense *usense, const char
 
 	dev = calloc(1, sizeof(*dev));
 
+	dev->mode = USENSE_MODE_UPDATE;
 	dev->next = usense->devices;
 	dev->name = strdup(name);
 	dev->pprev = &usense->devices;
@@ -277,6 +279,8 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 			usense_device_free(udev);
 			continue;
 		}
+
+		udev->mode = USENSE_MODE_READ;
 
 		break;
 	}
@@ -498,6 +502,7 @@ int usense_prop_get(struct usense_device *dev, const char *key, char *buff, size
 int usense_prop_set(struct usense_device *dev, const char *key, const char *value)
 {
 	struct usense_prop *prop, match;
+	int writable = 0;
 
 	if (key == NULL || value == NULL || strlen(value) >= USENSE_PROP_MAX) {
 		return -EINVAL;
@@ -517,6 +522,25 @@ int usense_prop_set(struct usense_device *dev, const char *key, const char *valu
 		if (units == 0) {
 			return -EINVAL;
 		}
+
+		writable = 1;
+	}
+
+	/* Does the device says it's writable? */
+	if (!writable
+	    && dev->probe->on_prop_set != NULL
+	    && dev->mode != USENSE_MODE_UPDATE) {
+		int err;
+
+		err = dev->probe->on_prop_set(dev, dev->priv, key, value);
+		if (err < 0) {
+			return -EINVAL;
+		}
+		writable = 1;
+	}
+
+	if (!writable && dev->mode != USENSE_MODE_UPDATE) {
+		return -EROFS;
 	}
 
 	match.key = key;

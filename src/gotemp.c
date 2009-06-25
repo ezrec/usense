@@ -25,7 +25,7 @@
 
 struct gotemp {
 	usb_dev_handle *usb;
-	struct usense_device *dev;
+
 	/* This is close to the structure I found in Greg's Code
 	 * NOTE: This is in little endian format!
 	 */
@@ -43,24 +43,33 @@ struct gotemp {
 	} calibrate;
 };
 
-static void gotemp_calibrate(struct gotemp *gotemp)
+static int gotemp_on_prop_set(struct usense_device *dev, void *priv, const char *key, const char *val)
 {
+	struct gotemp *gotemp = priv;
 	char buff[PATH_MAX];
 	const char *cp;
-	int err;
+	int err, len;
+	double d;
 
-	gotemp->calibrate.add = 0.0;
-	gotemp->calibrate.mult = 1.0;
-
-	err = usense_prop_get(gotemp->dev, "calibrate.add", buff, sizeof(buff));
-	if (err >= 0) {
-		gotemp->calibrate.add = strtod(cp, NULL);
+	if (strcmp(key, "gotemp.cal.add") == 0) {
+		err = sscanf(val, "%lf%n", &d, &len);
+		if (err != 1 || len != strlen(val)) {
+			return -EINVAL;
+		}
+		gotemp->calibrate.add = d;
+		return 0;
 	}
 
-	err = usense_prop_get(gotemp->dev, "calibrate.mult", buff, sizeof(buff));
-	if (err >= 0) {
-		gotemp->calibrate.mult = strtod(cp, NULL);
+	if (strcmp(key, "gotemp.cal.mul") == 0) {
+		err = sscanf(val, "%lf%n", &d, &len);
+		if (err != 1 || len != strlen(val)) {
+			return -EINVAL;
+		}
+		gotemp->calibrate.mult = d;
+		return 0;
 	}
+
+	return -EINVAL;
 }
 
 void gotemp_release(void *priv)
@@ -100,15 +109,21 @@ static int gotemp_attach(struct usense_device *dev, struct usb_dev_handle *usb, 
 {
 	int err;
 	struct gotemp *gotemp;
+	char buff[USENSE_PROP_MAX];
 
 	gotemp = calloc(1, sizeof(*gotemp));
-	gotemp->usb = usb;
-	gotemp->dev = dev;
-	gotemp_calibrate(gotemp);
-
 	if (gotemp == NULL) {
 		return -ENODEV;
 	}
+
+	gotemp->usb = usb;
+	gotemp->calibrate.add = 0.0;
+	gotemp->calibrate.mult = 1.0;
+
+	snprintf(buff, sizeof(buff), "%g", gotemp->calibrate.add);
+	usense_prop_set(dev, "gotemp.cal.add", buff);
+	snprintf(buff, sizeof(buff), "%g", gotemp->calibrate.mult);
+	usense_prop_set(dev, "gotemp.cal.mul", buff);
 
 	/* Do a dummy update first */
 	gotemp_update(dev, gotemp);
@@ -138,4 +153,5 @@ const struct usense_probe _usense_probe_gotemp = {
 	.probe = { .usb = { .match = gotemp_match, .attach = gotemp_attach, } },
 	.release = gotemp_release,
 	.update = gotemp_update,
+	.on_prop_set = gotemp_on_prop_set,
 };
