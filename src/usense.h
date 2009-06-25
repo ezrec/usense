@@ -121,8 +121,22 @@ const char *usense_device_name(struct usense_device *dev);
 /* Get property from device
  * (always returns in UTF8z format)
  *
- * The only 'guaranteed' to exists property is "reading", which is returned in
- * microkelvin units.
+ * Guaranteed properties:
+ *   device:	Device type (ie gotemp, TEMPer)
+ *   type:	temp	(for now)
+ *   units:	C, F, K, optionally prefixed by m(milli), u(micro) or n(nano)
+ *   reading:	Reading of the device in 'units'
+ *   name:	Unique name (ie usb:003.2)
+ *
+ * Guaranteed USB device info
+ *   usb.vendor:	USB vendor ID
+ *   usb.product:	USB product ID
+ *
+ * Device specific properties should be device_type.prop_name, ie:
+ *
+ *   gotemp.cal.add	X in reading = (temp + x) * y
+ *   gotemp.cal.mul	Y in reading = (temp + x) * y
+ *   TEMPer.precision	9 or 12 bits
  */
 int usense_prop_get(struct usense_device *dev, const char *prop, char *buff, size_t len);
 

@@ -120,6 +120,10 @@ static int gotemp_attach(struct usense_device *dev, struct usb_dev_handle *usb, 
 	gotemp->calibrate.add = 0.0;
 	gotemp->calibrate.mult = 1.0;
 
+	/* Set the device and type */
+	usense_prop_set(dev, "device", "gotemp");
+	usense_prop_set(dev, "type", "temp");
+
 	snprintf(buff, sizeof(buff), "%g", gotemp->calibrate.add);
 	usense_prop_set(dev, "gotemp.cal.add", buff);
 	snprintf(buff, sizeof(buff), "%g", gotemp->calibrate.mult);

@@ -173,6 +173,7 @@ static struct usense_device *usense_device_new(struct usense *usense, const char
 	dev->probe = probe;
 
 	usense_prop_set(dev, "reading", "unknown");
+	usense_prop_set(dev, "name", dev->name);
 
 	return dev;
 }
@@ -199,6 +200,25 @@ static void usense_device_free(struct usense_device *dev)
 	free(dev->prop);
 	free(dev->name);
 	free(dev);
+}
+
+static int usense_check_for(struct usense_device *dev, const char *type, const char **arr, size_t len)
+{
+	char buff[USENSE_PROP_MAX];
+	int i;
+
+	/* Check for generics */
+	for (i = 0; i < len; i++) {
+		int err;
+		err = usense_prop_get(dev, arr[i], buff, sizeof(buff));
+		if (err < 0) {
+			fprintf(stderr, "%s: Missing %s property '%s'\n",
+					dev->name, type, arr[i]);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
 }
 
 static uint32_t units_is_valid(const char *type, const char *value)
@@ -245,6 +265,52 @@ static uint32_t units_is_valid(const char *type, const char *value)
 	return 0;
 }
 
+static int usense_prop_validate(struct usense_device *dev)
+{
+	const char *generic[] = {
+		"device",
+		"type",
+		"units",
+		"reading",
+		"name",
+	};
+	const char *type_usb[] = {
+		"usb.vendor",
+		"usb.product",
+	};
+	int err;
+	char buff[USENSE_PROP_MAX];
+
+	/* Force default units based upon type */
+	err = usense_prop_get(dev, "type", buff, sizeof(buff));
+	if (err < 0) {
+		fprintf(stderr,"%s: Device has no 'type' property\n", dev->name);
+		return -EINVAL;
+	}
+
+	/* Temperature sensors are in 'C'elsius by default.
+	 */
+	if (strcmp(buff, "temp") == 0) {
+		err = usense_prop_set(dev, "units", "C");
+		assert(err >= 0);
+	}
+
+	/* Validate that all generic properties are valid */
+	err = usense_check_for(dev, "generic", generic, ARRAY_SIZE(generic));
+	if (err < 0) {
+		return err;
+	}
+
+	if (dev->probe->type == USENSE_PROBE_USB) {
+		err = usense_check_for(dev, "USB", type_usb, ARRAY_SIZE(type_usb));
+		if (err < 0) {
+			return err;
+		}
+	}
+
+	return 0;
+}
+
 static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_device *dev)
 {
 	int i;
@@ -274,7 +340,21 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 
 		snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
 		udev = usense_device_new(usense, name, dev_probe[i], usb);
+
+		/* Set the USB properties */
+		snprintf(name, sizeof(name), "%04x", dev->descriptor.idVendor);
+		usense_prop_set(udev, "usb.vendor", name);
+		snprintf(name, sizeof(name), "%04x", dev->descriptor.idProduct);
+		usense_prop_set(udev, "usb.product", name);
+
 		err = dev_probe[i]->probe.usb.attach(udev, usb, &udev->priv);
+		if (err < 0) {
+			usense_device_free(udev);
+			continue;
+		}
+
+		/* Validate properties */
+		err = usense_prop_validate(udev);
 		if (err < 0) {
 			usense_device_free(udev);
 			continue;
