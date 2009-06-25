@@ -1,6 +1,6 @@
 /*
- * Copyright 2009, Netronome Systems
- * Author: Jason McMullan <jason.mcmullan@netronome.com>
+ * Copyright 2009, Jason S. McMullan
+ * Author: Jason S. McMullan <jason.mcmullan@gmail.com>
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -19,40 +19,37 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "usense.h"
 
-int list_devices(void)
+static const char *program;
+
+static int list_devices(void)
 {
 	struct usense *usense;
 	struct usense_device *dev;
 
 	usense = usense_start(0, NULL);
 	if (usense == NULL) {
-		return EXIT_SUCCESS;
+		fprintf(stderr, "%s: Can't create a new usense monitor\n", program);
+		return EXIT_FAILURE;
 	}
 
 	for (dev = usense_first(usense); dev != NULL; dev = usense_next(usense, dev)) {
 		printf("%s\n", usense_device_name(dev));
 	}
 
-	return 0;
-
 	usense_stop(usense);
+
+	return 0;
 }
 
-int list_device_props(const char *dev_name)
+static int list_device_props(struct usense_device *dev)
 {
-	struct usense_device *dev;
 	char value[PATH_MAX];
 	const char *key;
 	int err;
-
-	dev = usense_open(dev_name);
-	if (dev == NULL) {
-		fprintf(stderr, "%s: No such sensor\n", dev_name);
-		return EXIT_FAILURE;
-	}
 
 	for (key = usense_prop_first(dev); key != NULL; key = usense_prop_next(dev, key)) {
 		err = usense_prop_get(dev, key, value, sizeof(value));
@@ -65,21 +62,14 @@ int list_device_props(const char *dev_name)
 	return EXIT_SUCCESS;
 }
 
-int show_device_prop(const char *dev_name, const char *prop_name)
+int show_device_prop(struct usense_device *dev, const char *prop_name)
 {
-	struct usense_device *dev;
 	char value[PATH_MAX];
 	int err;
 
-	dev = usense_open(dev_name);
-	if (dev == NULL) {
-		fprintf(stderr, "%s: No such sensor\n", dev_name);
-		return EXIT_FAILURE;
-	}
-
 	err = usense_prop_get(dev, prop_name, value, sizeof(value));
 	if (err < 0) {
-		fprintf(stderr, "%s: No such property \"%s\"\n", dev_name, prop_name);
+		fprintf(stderr, "%s: No such property \"%s\"\n", usense_device_name(dev), prop_name);
 		return EXIT_FAILURE;
 	}
 	printf("%s\n", value);
@@ -87,20 +77,13 @@ int show_device_prop(const char *dev_name, const char *prop_name)
 	return EXIT_SUCCESS;
 }
 
-int set_device_prop(const char *dev_name, const char *prop_name, const char *value)
+int set_device_prop(struct usense_device *dev, const char *prop_name, const char *value)
 {
-	struct usense_device *dev;
 	int err;
-
-	dev = usense_open(dev_name);
-	if (dev == NULL) {
-		fprintf(stderr, "%s: No such sensor\n", dev_name);
-		return EXIT_FAILURE;
-	}
 
 	err = usense_prop_set(dev, prop_name, value);
 	if (err < 0) {
-		fprintf(stderr, "%s: Can't set property \"%s\"\n", dev_name, prop_name);
+		fprintf(stderr, "%s: Can't set property \"%s\" to \"%s\"\n", usense_device_name(dev), prop_name, value);
 		return EXIT_FAILURE;
 	}
 
@@ -109,25 +92,50 @@ int set_device_prop(const char *dev_name, const char *prop_name, const char *val
 
 int main(int argc, char **argv)
 {
+	struct usense_device *dev;
+	int i, err = 0;
+
+	program = argv[0];
+
 	if (argc == 1) {
 		/* List all */
 		return list_devices();
 	}
 
+	dev = usense_open(argv[1]);
+	if (dev == NULL) {
+		fprintf(stderr, "%s: No such sensor '%s'\n", program, argv[1]);
+		return EXIT_FAILURE;
+	}
+
 	if (argc == 2) {
 		/* List props of a device */
-		return list_device_props(argv[1]);
+		return list_device_props(dev);
 	}
 
-	if (argc == 3) {
-		/* List single prop of a device */
-		return show_device_prop(argv[1], argv[2]);
+	argc -= 1;
+	argv += 1;
+	for (i = 1; i < argc; i++) {
+		char *cp;
+
+		cp = strchr(argv[i],'=');
+		if (cp == NULL) {
+			/* List single prop of a device */
+			err = show_device_prop(dev, argv[i]);
+			if (err < 0) {
+				break;
+			}
+		} else {
+			*(cp++) = 0;
+			/* Set prop of a device */
+			err = set_device_prop(dev, argv[i], cp);
+			if (err < 0) {
+				break;
+			}
+		}
 	}
 
-	if (argc == 4) {
-		/* Set prop of a device */
-		return set_device_prop(argv[1], argv[2], argv[3]);
-	}
+	usense_close(dev);
 
-	return EXIT_FAILURE;
+	return (err < 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }

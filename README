@@ -27,32 +27,35 @@ Using
 -----
 
  $ usense
- Usage:
+ usb:003.1
+ usb:003.2
+ usb:004.1
 
- $ usense
- usb:3.1
- usb:3.2
- usb:4.1
- $ usense usb:3.2
- device=usb:3.2
+ $ usense usb:003.2
+ device=usb:003.2
+ gotemp.cal.add=-0.05
+ gotemp.cal.mul=1.002
  reading=27.4
- vendor=Vernier
- device=Go!Temp
- calibration.mult=1.002
- calibration.add=-0.05
+ type=temp
+ units=C
+ usb.product=0002
+ usb.vendor=08f7
+
  $ usense 3.2 reading
  27.4
 
 Configuration
 -------------
 
- $ usense usb:3.2
- device=usb:3.2
+ $ usense usb:003.2
+ device=usb:003.2
+ gotemp.cal.add=-0.05
+ gotemp.cal.mul=1.002
  reading=27.4
- vendor=Vernier
- device=Go!Temp
- calibration.mult=1.002
- calibration.add=-0.05
- $ usense usb:3.2 calibration.mult 1.003
- $ usense usb:3.2 calibration.mult
- calibration.mult=1.003
+ type=temp
+ units=C
+ usb.product=0002
+ usb.vendor=08f7
+
+ $ usense usb:003.2 gotemp.cal.mul=1.003 units=F reading
+ 106.97
