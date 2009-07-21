@@ -209,8 +209,12 @@ static int TEMPer_attach(struct usense_device *dev, struct usb_dev_handle *usb, 
 		ch341_close(ch);
 		return -EINVAL;
 	} else {
-		usense_prop_set(dev, "resolution","12");
+		usense_prop_set(dev, "TEMPer.resolution","12");
 	}
+
+	/* Set the device and type */
+	usense_prop_set(dev, "device", "TEMPer");
+	usense_prop_set(dev, "type", "temp");
 
 	TEMPer_update(dev, temper);
 
