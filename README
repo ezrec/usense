@@ -41,7 +41,7 @@ Using
  usb.product=0002
  usb.vendor=08f7
 
- $ usense 3.2 reading
+ $ usense usb:003.2 reading
  27.4
 
 Configuration
