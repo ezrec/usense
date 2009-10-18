@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.61])
-AC_INIT([usense], [1.2], [jason.mcmullan@gmail.com])
+AC_INIT([usense], [1.3], [jason.mcmullan@gmail.com])
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
