@@ -25,16 +25,19 @@
 #include "usense.h"
 #include "units.h"
 
+#define CAL_ADD	(-1.0)
+#define CAL_MUL	(37.0/34.5)
+
 struct temper {
 	struct usb_dev_handle *usb;
 };
 
 #define TEMPER_TIMEOUT	1000
 
-static int temp_read(struct usb_dev_handle *usb, double *val)
+static int temp_read(struct usb_dev_handle *usb, int16_t *val)
 {
 	uint8_t buff[256];
-	double tmp;
+	int16_t tmp;
 	int err, i;
 
 	memset(buff, 0, sizeof(buff));
@@ -75,12 +78,14 @@ static int temp_read(struct usb_dev_handle *usb, double *val)
 
 	memset(buff, 0, sizeof(buff));
 	err = usb_control_msg(usb, 0xa1, 1, 0x300, 0x01,
-	                      (void *)buff, 256, TEMPER_TIMEOUT);
+	                      (void *)buff, 8, TEMPER_TIMEOUT);
 	if (err < 0) return err;
 
-	tmp = ((int32_t)buff[0] << 8) | buff[1];
-	tmp += 1152;	/* Calibration value, from Robert Kavaler's temper.c */
-	tmp *= 125.0 / 32000.0;
+	/* First byte is Degrees C
+	 * Second byte is 256ths Degrees C
+	 * Third byte is 0x31 - Unknown at this time.
+	 */
+	tmp = ((int16_t)((buff[0]<<8) | buff[1]));
 
 	*val = tmp;
 
@@ -89,7 +94,7 @@ static int temp_read(struct usb_dev_handle *usb, double *val)
 
 static int PCsensor_Temper_update(struct usense_device *dev, void *priv)
 {
-	double temp;
+	int16_t temp;
 	struct temper *temper = priv;
 	int err;
 
@@ -99,10 +104,11 @@ static int PCsensor_Temper_update(struct usense_device *dev, void *priv)
 		fprintf(stderr, "%s: Can't read temperature\n", usense_device_name(dev));
 		return -EINVAL;
 	} else {
-		/* microKelvin */
+		/* Kelvin */
 		char buff[48];
-		double kelvin = C_TO_K(temp);
-		snprintf(buff, sizeof(buff), "%g", kelvin);
+		double celsius = (temp / 256.0 + CAL_ADD) * CAL_MUL;
+		double kelvin = C_TO_K(celsius);
+		snprintf(buff, sizeof(buff), "%.2g", kelvin);
 		usense_prop_set(dev, "reading", buff);
 	}
 
