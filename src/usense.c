@@ -67,7 +67,9 @@ struct usense {
 static const struct usense_probe **dev_probe;
 static int dev_probes;
 
-extern const struct usense_probe _usense_probe_gotemp, _usense_probe_TEMPer;
+extern const struct usense_probe _usense_probe_gotemp;
+extern const struct usense_probe _usense_probe_TEMPer;
+extern const struct usense_probe _usense_probe_PCsensor_Temper;
 
 /* Register device to look for
  */
@@ -107,6 +109,7 @@ static int usense_init(void)
 	if (dev_probes == 0) {
 		usense_probe_register(&_usense_probe_gotemp);
 		usense_probe_register(&_usense_probe_TEMPer);
+		usense_probe_register(&_usense_probe_PCsensor_Temper);
 	}
 }
 
