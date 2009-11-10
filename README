@@ -26,10 +26,20 @@ support files. From there, just run:
 Using
 -----
 
+If you have a later model TEMPer, you will
+need to run the following command to prevent
+the build-in kernel HID driver from 'stealing' it.
+
+ $ sudo rmmod usbhid
+
+To list the available devices:
+
  $ usense
  usb:003.1
  usb:003.2
  usb:004.1
+
+Get the properties of a device
 
  $ usense usb:003.2
  device=usb:003.2
@@ -40,6 +50,8 @@ Using
  units=C
  usb.product=0002
  usb.vendor=08f7
+
+Get a single property of a device:
 
  $ usense usb:003.2 reading
  27.4
@@ -56,6 +68,9 @@ Configuration
  units=C
  usb.product=0002
  usb.vendor=08f7
+
+Set properties on the command line, *before* the property
+you want to read:
 
  $ usense usb:003.2 gotemp.cal.mul=1.003 units=F reading
  106.97
