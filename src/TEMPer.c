@@ -80,6 +80,54 @@ static int  temper_getsda(void *data)
 #define REG_THYST	2
 #define REG_TOS		3
 
+/* Many I2C devices can get into weird states.
+ * The recommened technique by Phillips is
+ * to 'clock out' 9 clocks.
+ *
+ * Improvided a little by framing between
+ * a START, repeated START, and a STOP condition.
+ *
+ * Call this before any set of operations.
+ */
+static int temp_reset(struct i2c_adapter *adap)
+{
+	struct i2c_algo_bit_data *bit = adap->algo_data;
+	int i;
+
+	/* Send a START condition */
+	bit->setscl(bit->data, 1);
+	bit->setsda(bit->data, 1);
+	usleep(500);
+	bit->setsda(bit->data, 0);
+	usleep(500);
+	bit->setscl(bit->data, 0);
+
+	/* Send out a 1Khz waveform of
+	 * 9 clock pulses
+	 */
+	bit->setsda(bit->data, 1);
+	for (i = 0; i < 9; i++) {
+		bit->setscl(bit->data, 1);
+		usleep(500);
+		bit->setscl(bit->data, 0);
+		usleep(500);
+	}
+
+	/* Send out START condition again */
+	bit->setscl(bit->data, 1);
+	usleep(500);
+	bit->setsda(bit->data, 0);
+	usleep(500);
+	bit->setscl(bit->data, 0);
+	usleep(500);
+
+	/* And send STOP condition */
+	bit->setscl(bit->data, 1);
+	usleep(500);
+	bit->setsda(bit->data, 1);
+	usleep(500);
+}
+
 static int temp_cfg_read(struct i2c_adapter *adap, uint8_t *val)
 {
 	uint8_t ptr = REG_CONFIG;
@@ -145,6 +193,9 @@ static int TEMPer_update(struct usense_device *dev, void *priv)
 	struct temper *temper = priv;
 	int err;
 
+	/* Reset device */
+	temp_reset(&temper->adap);
+
 	/* Dump temp */
 	err = temp_read(&temper->adap, REG_TEMP, &temp);
 	if (err < 0) {
@@ -191,6 +242,9 @@ static int TEMPer_attach(struct usense_device *dev, struct usb_dev_handle *usb, 
 	strncpy(&temper->adap.name[0], "ch341-i2c", sizeof(temper->adap.name));
 	temper->adap.algo_data = &temper->i2c_bit;
 	i2c_bit_add_bus(&temper->adap);
+
+	/* Reset device */
+	temp_reset(&temper->adap);
 
 	/* Read config */
 	cfg = 0;
