@@ -11,6 +11,11 @@ Have fun!
 Compiling
 ---------
 
+Make sure you are running something current. Ubuntu 8.10 or
+later is recommended. I have not tested this code on
+any earlier distibution. A kernel later than 2.6.30 is
+recommended.
+
 If you've checked this out from the repository, you will notice
 that the 'configure' file is missing. Not a problem! Just run:
 
