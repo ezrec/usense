@@ -316,9 +316,13 @@ static int usense_prop_validate(struct usense_device *dev)
 
 static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_device *dev)
 {
-	int i;
+	int i,j;
 	struct usense_device *udev = NULL;
 	char name[PATH_MAX];
+
+	if (dev->config == NULL) {
+		return NULL;
+	}
 
 	for (i = 0; i < dev_probes; i++) {
 		struct usb_dev_handle *usb;
@@ -334,7 +338,9 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 			continue;
 		}
 		err = usb_clear_halt(usb, 0);
-		err = usb_detach_kernel_driver_np(usb, 0);
+		for (j = 0; j < dev->config->bNumInterfaces; j++) {
+			err = usb_detach_kernel_driver_np(usb, j);
+		}
 		err = usb_claim_interface(usb, 0);
 		if (err < 0) {
 			usb_close(usb);
