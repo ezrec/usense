@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
@@ -674,7 +675,7 @@ const char *usense_prop_next(struct usense_device *dev, const char *curr_prop)
 	}
 
 	prop++;
-	if ((prop - dev->prop) > dev->props) {
+	if ((prop - dev->prop) >= dev->props) {
 		return NULL;
 	}
 
