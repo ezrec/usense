@@ -101,7 +101,7 @@ int gotemp_update(struct usense_device *dev, void *priv)
 	} while (0);
 
 	kelvin = C_TO_K((((double) gotemp->packet.measurement0) * conversion * gotemp->calibrate.mult) + gotemp->calibrate.add);
-	snprintf(buff, sizeof(buff), "%g", kelvin);
+	snprintf(buff, sizeof(buff), "%.2f", kelvin);
 	return usense_prop_set(dev, "reading", buff);
 }
 
