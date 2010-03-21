@@ -86,6 +86,10 @@ static int temp_read(struct usb_dev_handle *usb, int16_t *val)
 	 * Second byte is 256ths Degrees C
 	 * Third byte is 0x31 - Unknown at this time.
 	 */
+	if (buff[2] != 0x31) {
+		return -EAGAIN;
+	}
+
 	tmp = ((int16_t)((buff[0]<<8) | buff[1]));
 
 	*val = tmp;
@@ -100,7 +104,9 @@ static int PCsensor_Temper_update(struct usense_device *dev, void *priv)
 	int err;
 
 	/* Dump temp */
-	err = temp_read(temper->usb, &temp);
+	do {
+		err = temp_read(temper->usb, &temp);
+	} while (err == -EAGAIN);
 	if (err < 0) {
 		fprintf(stderr, "%s: Can't read temperature\n", usense_device_name(dev));
 		return -EINVAL;
