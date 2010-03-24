@@ -108,7 +108,7 @@ static int PCsensor_Temper_update(struct usense_device *dev, void *priv)
 		char buff[48];
 		double celsius = (temp / 256.0 + CAL_ADD) * CAL_MUL;
 		double kelvin = C_TO_K(celsius);
-		snprintf(buff, sizeof(buff), "%.2g", kelvin);
+		snprintf(buff, sizeof(buff), "%g", kelvin);
 		usense_prop_set(dev, "reading", buff);
 	}
 
