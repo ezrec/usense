@@ -554,9 +554,9 @@ static void convert_reading(struct usense_device *dev, const char *val, char *bu
 	}
 
 	n = USENSE_UNITS_POW_10_of(units);
-	d *= power10(n);
+	d /= power10(n);
 
-	snprintf(buff, len, "%g", d);
+	snprintf(buff, len, "%d", (int)d);
 }
 
 
