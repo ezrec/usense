@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.61])
 AC_INIT([usense], [1.4], [jason.mcmullan@gmail.com])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
