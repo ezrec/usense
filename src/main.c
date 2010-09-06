@@ -45,6 +45,33 @@ static int list_devices(void)
 	return 0;
 }
 
+static const char *nth_device(int n)
+{
+	struct usense *usense;
+	struct usense_device *dev;
+	static char buff[PATH_MAX];
+	char *cp = NULL;
+
+	usense = usense_start(0, NULL);
+	if (usense == NULL) {
+		fprintf(stderr, "%s: Can't create a new usense monitor\n", program);
+		return NULL;
+	}
+
+	for (dev = usense_first(usense); dev != NULL && n > 0; dev = usense_next(usense, dev), n--);
+
+	if (dev != NULL) {
+		strncpy(buff, usense_device_name(dev), sizeof(buff));
+		buff[sizeof(buff)-1] = 0;
+		cp = buff;
+	}
+
+	usense_stop(usense);
+
+	return cp;
+}
+
+
 static int list_device_props(struct usense_device *dev)
 {
 	char value[PATH_MAX];
@@ -94,6 +121,8 @@ int main(int argc, char **argv)
 {
 	struct usense_device *dev;
 	int i, err = 0;
+	char *cp;
+	const char *devname;
 
 	program = argv[0];
 
@@ -102,9 +131,18 @@ int main(int argc, char **argv)
 		return list_devices();
 	}
 
-	dev = usense_open(argv[1]);
+	devname = argv[1];
+
+	i = strtol(devname, &cp, 0);
+	if (*cp == 0) {
+		devname = nth_device(i);
+		if (devname == NULL)
+			devname = argv[1];
+	}
+
+	dev = usense_open(devname);
 	if (dev == NULL) {
-		fprintf(stderr, "%s: No such sensor '%s'\n", program, argv[1]);
+		fprintf(stderr, "%s: No such sensor '%s'\n", program, devname);
 		return EXIT_FAILURE;
 	}
 
