@@ -338,14 +338,15 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 		if (usb == NULL) {
 			continue;
 		}
-		err = usb_clear_halt(usb, 0);
-		for (j = 0; j < dev->config->bNumInterfaces; j++) {
-			err = usb_detach_kernel_driver_np(usb, j);
-		}
+
 		err = usb_claim_interface(usb, 0);
 		if (err < 0) {
 			usb_close(usb);
 			continue;
+		}
+
+		for (j = 0; j < dev->config->bNumInterfaces; j++) {
+			err = usb_detach_kernel_driver_np(usb, j);
 		}
 
 		snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
