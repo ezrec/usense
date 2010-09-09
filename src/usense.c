@@ -19,6 +19,7 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -32,6 +33,11 @@
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x)	(sizeof(x)/sizeof(x[0]))
+#endif
+
+#ifndef container_of
+#define container_of(var, obj, field) \
+	 ((obj *)((char *)(var) - offsetof(obj, field)))
 #endif
 
 struct usense_prop {
@@ -52,7 +58,7 @@ struct usense_prop {
 struct usense_device {
 	struct usense_device *next, **pprev;
 	enum { USENSE_MODE_READ, USENSE_MODE_UPDATE } mode;
-	char *name;
+	char name[PATH_MAX];
 	const struct usense_probe *probe;
 	void *priv;
 	struct usense_prop *prop;	/* bsearch */
@@ -136,7 +142,7 @@ static struct usense *usense_new(void)
 	return usense;
 }
 
-struct usense *usense_start(int devices, const char **device_names)
+struct usense *usense_start(void)
 {
 	struct usense *usense;
 
@@ -169,7 +175,8 @@ static struct usense_device *usense_device_new(struct usense *usense, const char
 
 	dev->mode = USENSE_MODE_UPDATE;
 	dev->next = usense->devices;
-	dev->name = strdup(name);
+	strncpy(dev->name, name, sizeof(dev->name));
+	dev->name[sizeof(dev->name)-1]=0;
 	dev->pprev = &usense->devices;
 	usense->devices = dev;
 	if (dev->next != NULL) {
@@ -327,8 +334,8 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 		return NULL;
 	}
 
+	snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
 	for (i = 0; i < dev_probes; i++) {
-		struct usb_dev_handle *usb;
 		int err;
 
 		if (dev_probe[i]->type != USENSE_PROBE_USB)
@@ -336,36 +343,7 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 		if (!dev_probe[i]->probe.usb.match(&dev->descriptor))
 			continue;
 
-		usb = usb_open(dev);
-		if (usb == NULL) {
-			continue;
-		}
-
-		snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
-		for (j = 0; j < dev->config->bNumInterfaces; j++) {
-			int timeout = 5;
-			do {
-				err = usb_claim_interface(usb, j);
-				if (err == -EBUSY) {
-					sleep(1);
-					timeout--;
-				}
-			} while (err == -EBUSY && timeout > 0);
-			if (err < 0)
-				break;
-			err = usb_detach_kernel_driver_np(usb, j);
-			if (err == -ENOENT)
-				err = 0;
-			else if (err < 0)
-				break;
-		}
-
-		if (err < 0) {
-			usb_close(usb);
-			continue;
-		}
-
-		udev = usense_device_new(usense, name, dev_probe[i], usb);
+		udev = usense_device_new(usense, name, dev_probe[i], dev);
 
 		/* Set the USB properties */
 		snprintf(name, sizeof(name), "%04x", dev->descriptor.idVendor);
@@ -373,57 +351,62 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 		snprintf(name, sizeof(name), "%04x", dev->descriptor.idProduct);
 		usense_prop_set(udev, "usb.product", name);
 
-		err = dev_probe[i]->probe.usb.attach(udev, usb, &udev->priv);
-		if (err < 0) {
-			usense_device_free(udev);
-			continue;
-		}
-
-		/* Validate properties */
-		err = usense_prop_validate(udev);
-		if (err < 0) {
-			usense_device_free(udev);
-			continue;
-		}
-
-		udev->mode = USENSE_MODE_READ;
-
 		break;
 	}
 
 	return udev;
 }
 
-static int usb_is_initted = 0;
-
-static struct usb_device *usb_find(const char *bus_name, int dev_id)
+static int usense_attach_usb(struct usense_device *udev)
 {
-	struct usb_bus *busses, *bus;
+	struct usb_device *dev = udev->handle;
+	struct usb_dev_handle *usb;
+	int j, err;
 
-	if (!usb_is_initted) {
-		usb_init();
-		usb_is_initted = 1;
+	usb = usb_open(dev);
+	if (usb == NULL)
+		return -EPERM;
+
+	for (j = 0; j < dev->config->bNumInterfaces; j++) {
+		int timeout = 5;
+		do {
+			err = usb_claim_interface(usb, j);
+			if (err == -EBUSY) {
+				sleep(1);
+				timeout--;
+			}
+		} while (err == -EBUSY && timeout > 0);
+		if (err < 0)
+			break;
+		err = usb_detach_kernel_driver_np(usb, j);
+		if (err == -ENOENT)
+			err = 0;
+		else if (err < 0)
+			break;
 	}
 
-	usb_find_busses();
-	usb_find_devices();
-
-	busses = usb_get_busses();
-
-	for (bus = busses; bus != NULL; bus = bus->next) {
-		struct usb_device *dev;
-
-		if (strcmp(bus->dirname, bus_name) != 0)
-			continue;
-
-		for (dev = bus->devices; dev != NULL; dev = dev->next) {
-			if (dev->devnum  == dev_id)
-				return dev;
-		}
+	if (err < 0) {
+		usb_close(usb);
+		return err;
 	}
 
-	return NULL;
+	err = udev->probe->probe.usb.attach(udev, usb, &udev->priv);
+	if (err < 0) {
+		usb_close(usb);
+		return err;
+	}
+
+	/* Validate properties */
+	err = usense_prop_validate(udev);
+	if (err < 0)
+		return err;
+
+	udev->mode = USENSE_MODE_READ;
+
+	return 0;
 }
+
+static int usb_is_initted = 0;
 
 /*
  * Rescan for new devices.
@@ -453,14 +436,23 @@ void usense_detect(struct usense *usense)
 
 /* Walk the device list.
  */
-struct usense_device *usense_first(struct usense *usense)
+const char *usense_next(struct usense *usense, const char *prev_name)
 {
-	return usense->devices;
-}
+	struct usense_device *dev;
 
-struct usense_device *usense_next(struct usense *usense, struct usense_device *curr_dev)
-{
-	return curr_dev->next;
+	if (prev_name == NULL) {
+		if (usense->devices == NULL)
+			return NULL;
+		else
+			return &usense->devices->name[0];
+	}
+
+	dev = container_of(prev_name, struct usense_device, name);
+
+	if (dev->next == NULL)
+		return NULL;
+
+	return &dev->next->name[0];
 }
 
 /*
@@ -472,34 +464,27 @@ int usense_monitor_fd(struct usense *usense)
 	return usense->fd;
 }
 
-/************** Use-once mode ****************
+/************** Open a device ****************
  */
-struct usense_device *usense_open(const char *device_name)
+struct usense_device *usense_open(struct usense *usense, const char *device_name)
 {
-	static struct usense *usense = NULL;
+	struct usense_device *dev;
 
-	if (usense == NULL) {
-		usense = usense_new();
+	if (usense == NULL)
+		return NULL;
+
+	for (dev = usense->devices; dev != NULL; dev = dev->next) {
+		if (strcmp(dev->name, device_name) == 0)
+			break;
 	}
+	
+	if (dev == NULL)
+		return NULL;
 
-	if (strncmp(device_name, "usb:", 4) == 0) {
-		struct usb_device *udev;
-		int err, dev_no, len;
-		char bus_name[256];
-
-		err = sscanf(device_name,"usb:%256[^.].%d%n", bus_name, &dev_no, &len);
-		if (err != 2 || len != strlen(device_name)) {
-			return NULL;
-		}
-
-		udev = usb_find(bus_name, dev_no);
-		if (udev == NULL)
-			return NULL;
-
-		return usense_probe_usb(usense, udev);
-	}
-
-	return NULL;
+	if (dev->probe->type == USENSE_PROBE_USB)
+		return (usense_attach_usb(dev) == 0) ? dev : NULL;
+	else
+		return NULL;
 }
 
 

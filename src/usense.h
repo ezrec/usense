@@ -89,7 +89,7 @@ void usense_probe_unregister(const struct usense_probe *ops);
  *  usb:<bus>.<device>
  *
  */
-struct usense *usense_start(int devices, const char **device_names);
+struct usense *usense_start(void);
 void usense_stop(struct usense *usense);
 
 /*
@@ -98,9 +98,9 @@ void usense_stop(struct usense *usense);
 void usense_detect(struct usense *usense);
 
 /* Walk the device list.
+ * Use prev_name = NULL for the first device
  */
-struct usense_device *usense_first(struct usense *usense);
-struct usense_device *usense_next(struct usense *usense, struct usense_device *curr_dev);
+const char *usense_next(struct usense *usense, const char *prev_name);
 
 /*
  * fd to use with poll(2) for monitoring when device
@@ -108,9 +108,9 @@ struct usense_device *usense_next(struct usense *usense, struct usense_device *c
  */
 int usense_monitor_fd(struct usense *usense);
 
-/************** Use-once mode ****************
+/************** Open and close devices ****************
  */
-struct usense_device *usense_open(const char *device_name);
+struct usense_device *usense_open(struct usense *usense, const char *device_name);
 
 void usense_close(struct usense_device *dev);
 
