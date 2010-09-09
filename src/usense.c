@@ -136,11 +136,6 @@ static struct usense *usense_new(void)
 	return usense;
 }
 
-static void usense_free(struct usense *usense)
-{
-	free(usense);
-}
-
 struct usense *usense_start(int devices, const char **device_names)
 {
 	struct usense *usense;
@@ -156,7 +151,14 @@ struct usense *usense_start(int devices, const char **device_names)
 
 void usense_stop(struct usense *usense)
 {
-	usense_free(usense);
+	struct usense_device *dev, *tmp;
+
+	for (dev = usense->devices; dev != NULL; ) {
+		tmp = dev->next;
+		usense_close(dev);
+		dev = tmp;
+	}
+	free(usense);
 }
 
 static struct usense_device *usense_device_new(struct usense *usense, const char *name, const struct usense_probe *probe, void *handle)
@@ -339,17 +341,30 @@ static struct usense_device *usense_probe_usb(struct usense *usense, struct usb_
 			continue;
 		}
 
-		err = usb_claim_interface(usb, 0);
+		snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
+		for (j = 0; j < dev->config->bNumInterfaces; j++) {
+			int timeout = 5;
+			do {
+				err = usb_claim_interface(usb, j);
+				if (err == -EBUSY) {
+					sleep(1);
+					timeout--;
+				}
+			} while (err == -EBUSY && timeout > 0);
+			if (err < 0)
+				break;
+			err = usb_detach_kernel_driver_np(usb, j);
+			if (err == -ENOENT)
+				err = 0;
+			else if (err < 0)
+				break;
+		}
+
 		if (err < 0) {
 			usb_close(usb);
 			continue;
 		}
 
-		for (j = 0; j < dev->config->bNumInterfaces; j++) {
-			err = usb_detach_kernel_driver_np(usb, j);
-		}
-
-		snprintf(name, sizeof(name), "usb:%s.%d", dev->bus->dirname, dev->devnum);
 		udev = usense_device_new(usense, name, dev_probe[i], usb);
 
 		/* Set the USB properties */
