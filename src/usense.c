@@ -155,6 +155,12 @@ struct usense *usense_start(void)
 	return usense;
 }
 
+static void usense_device_free(struct usense_device *dev)
+{
+	free(dev->prop);
+	free(dev);
+}
+
 void usense_stop(struct usense *usense)
 {
 	struct usense_device *dev, *tmp;
@@ -162,6 +168,7 @@ void usense_stop(struct usense *usense)
 	for (dev = usense->devices; dev != NULL; ) {
 		tmp = dev->next;
 		usense_close(dev);
+		usense_device_free(dev);
 		dev = tmp;
 	}
 	free(usense);
@@ -196,23 +203,6 @@ static int usense_prop_cmp(const void *a, const void *b)
 	const struct usense_prop *prop_a = a, *prop_b = b;
 
 	return strcmp(prop_a->key, prop_b->key);
-}
-
-static void usense_device_free(struct usense_device *dev)
-{
-	if (dev->next != NULL) {
-		dev->next->pprev = dev->pprev;
-	}
-	*dev->pprev = dev->next;
-
-	switch (dev->probe->type) {
-	case USENSE_PROBE_INVALID: break;
-	case USENSE_PROBE_USB: usb_close(dev->handle); break;
-	}
-
-	free(dev->prop);
-	free(dev->name);
-	free(dev);
 }
 
 static int usense_check_for(struct usense_device *dev, const char *type, const char **arr, size_t len)
@@ -490,7 +480,10 @@ struct usense_device *usense_open(struct usense *usense, const char *device_name
 
 void usense_close(struct usense_device *dev)
 {
-	usense_device_free(dev);
+#if 0
+	if (dev->probe->type == USENSE_PROBE_USB)
+		usense_detach_usb(dev);
+#endif
 }
 
 /************** General get/set **************/
