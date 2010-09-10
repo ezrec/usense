@@ -369,6 +369,11 @@ static int usense_attach_usb(struct usense_device *udev)
 
 	for (j = 0; j < dev->config->bNumInterfaces; j++) {
 		int timeout = 5;
+		err = usb_detach_kernel_driver_np(usb, j);
+		if (err == -ENOENT)
+			err = 0;
+		else if (err < 0)
+			break;
 		do {
 			err = usb_claim_interface(usb, j);
 			if (err == -EBUSY) {
@@ -377,11 +382,6 @@ static int usense_attach_usb(struct usense_device *udev)
 			}
 		} while (err == -EBUSY && timeout > 0);
 		if (err < 0)
-			break;
-		err = usb_detach_kernel_driver_np(usb, j);
-		if (err == -ENOENT)
-			err = 0;
-		else if (err < 0)
 			break;
 	}
 
