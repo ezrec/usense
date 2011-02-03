@@ -9,6 +9,7 @@ usense_LDADD = libusense.la
 lib_LTLIBRARIES = libusense.la
 
 libusense_la_SOURCES = \
+		units.h \
 		usense.h usense.c \
 		gotemp.c \
 		PCsensor_Temper.c \
