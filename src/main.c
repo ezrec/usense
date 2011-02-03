@@ -113,7 +113,7 @@ int main(int argc, char **argv)
 	usense = usense_start();
 	if (usense == NULL) {
 		fprintf(stderr, "%s: Can't create a new usense monitor\n", program);
-		return NULL;
+		return EXIT_FAILURE;
 	}
 
 	if (argc == 1) {
