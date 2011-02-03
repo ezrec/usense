@@ -11,11 +11,17 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC
 AC_PROG_LIBTOOL
 
-# Checks for libraries.
-AC_CHECK_LIB([usb], [usb_init])
+# Checks for libusb
+AC_CHECK_HEADERS([usb.h],
+		 ,
+		 AC_MSG_ERROR([Please install the libusb development package]))
+AC_CHECK_LIB([usb], [usb_init],
+	     ,
+	     AC_MSG_ERROR([Please install the libusb development package]))
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h stdlib.h string.h strings.h syslog.h unistd.h usb.h])
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h strings.h syslog.h unistd.h])
+
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_INT16_T
