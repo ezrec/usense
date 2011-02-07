@@ -360,7 +360,7 @@ static int usense_attach_usb(struct usense_device *udev)
 	for (j = 0; j < dev->config->bNumInterfaces; j++) {
 		int timeout = 5;
 		err = usb_detach_kernel_driver_np(usb, j);
-		if (err == -ENOENT)
+		if ((err == -ENOENT) || (err == -ENODATA))
 			err = 0;
 		else if (err < 0)
 			break;
@@ -550,7 +550,11 @@ static void convert_reading(struct usense_device *dev, const char *val, char *bu
 	n = USENSE_UNITS_POW_10_of(units);
 	d /= power10(n);
 
-	snprintf(buff, len, "%d", (int)d);
+	/* MilliUnits and MicroUnits are integer */
+	if (n < -1)
+		snprintf(buff, len, "%lld", (int64_t)d);
+	else
+		snprintf(buff, len, "%g", d);
 }
 
 
