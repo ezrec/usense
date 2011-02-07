@@ -26,19 +26,41 @@
 #include "usense.h"
 #include "units.h"
 
-#define CAL_ADD	(-1.0)
-#define CAL_MUL	(37.0/34.5)
-
 struct temper {
 	struct usb_dev_handle *usb;
 };
 
 #define TEMPER_TIMEOUT	1000
 
+static int send_command(struct usb_dev_handle *usb, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned int e, unsigned int f, unsigned int g, unsigned int h)
+{
+	unsigned char buf[32];
+	int rc;
+
+	bzero(buf, 32);
+	buf[0] = a;
+	buf[1] = b;
+	buf[2] = c;
+	buf[3] = d;
+	buf[4] = e;
+	buf[5] = f;
+	buf[6] = g;
+	buf[7] = h;
+
+	rc = usb_control_msg(usb, 0x21, 9, 0x200, 0x01,
+			    (char *) buf, 32, TEMPER_TIMEOUT);
+	if(rc != 32) {
+		perror("send_command failed");
+		return -1;
+	}
+	return 0;
+}
+
+
 static int temp_read(struct usb_dev_handle *usb, int16_t *val)
 {
 	uint8_t buff[256];
-	int16_t tmp;
+	uint16_t tmp;
 	int err, i;
 
 	memset(buff, 0, sizeof(buff));
@@ -86,9 +108,20 @@ static int temp_read(struct usb_dev_handle *usb, int16_t *val)
 	 * Second byte is 256ths Degrees C
 	 * Third byte is 0x31 - Unknown at this time.
 	 */
-	tmp = ((int16_t)((buff[0]<<8) | buff[1]));
+	tmp = ((uint16_t)((buff[0]<<8) | buff[1]));
 
-	*val = tmp;
+	/* msb means the temperature is negative -- less than 0 Celsius -- and in 2'complement form.
+	 * We can't be sure that the host uses 2's complement to store negative numbers
+	 * so if the temperature is negative, we 'manually' get its magnitude
+	 * by explicity getting it's 2's complement and then we return the negative of that.
+	 */
+
+	if ((buff[0] & 0x80)!=0) {
+		/* return the negative of magnitude of the temperature */
+		*val = -((tmp ^ 0xffff)+1);
+	} else {
+		*val = tmp;
+	}
 
 	return 0;
 }
@@ -107,7 +140,7 @@ static int PCsensor_Temper_update(struct usense_device *dev, void *priv)
 	} else {
 		/* Kelvin */
 		char buff[48];
-		double celsius = (temp / 256.0 + CAL_ADD) * CAL_MUL;
+		double celsius = (double)temp/ 256.0;
 		double kelvin = C_TO_K(celsius);
 		snprintf(buff, sizeof(buff), "%g", kelvin);
 		usense_prop_set(dev, "reading", buff);
@@ -127,6 +160,17 @@ static int PCsensor_Temper_attach(struct usense_device *dev, struct usb_dev_hand
 	/* Set the device and type */
 	usense_prop_set(dev, "device", "PCsensor_Temper");
 	usense_prop_set(dev, "type", "temp");
+
+	/* Issue the commands to set the device to 12-bit mode */
+
+	send_command(usb, 10, 11, 12, 13, 0, 0, 2, 0);
+	send_command(usb, 0x43, 0, 0, 0, 0, 0, 0, 0);
+	send_command(usb, 0, 0, 0, 0, 0, 0, 0, 0);
+	send_command(usb, 0, 0, 0, 0, 0, 0, 0, 0);
+	send_command(usb, 0, 0, 0, 0, 0, 0, 0, 0);
+	send_command(usb, 0, 0, 0, 0, 0, 0, 0, 0);
+	send_command(usb, 0, 0, 0, 0, 0, 0, 0, 0);
+	send_command(usb, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	PCsensor_Temper_update(dev, temper);
 
