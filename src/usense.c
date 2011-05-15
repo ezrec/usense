@@ -552,7 +552,7 @@ static void convert_reading(struct usense_device *dev, const char *val, char *bu
 
 	/* MilliUnits and MicroUnits are integer */
 	if (n < -1)
-		snprintf(buff, len, "%lld", (int64_t)d);
+		snprintf(buff, len, "%lld", (long long int)d);
 	else
 		snprintf(buff, len, "%g", d);
 }
