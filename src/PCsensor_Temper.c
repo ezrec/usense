@@ -110,6 +110,9 @@ static int temp_read(struct usb_dev_handle *usb, int16_t *val)
 	 */
 	tmp = ((uint16_t)((buff[0]<<8) | buff[1]));
 
+	if (tmp == 0 || tmp == ~0)
+		return -EAGAIN;
+
 	/* msb means the temperature is negative -- less than 0 Celsius -- and in 2'complement form.
 	 * We can't be sure that the host uses 2's complement to store negative numbers
 	 * so if the temperature is negative, we 'manually' get its magnitude
@@ -136,7 +139,7 @@ static int PCsensor_Temper_update(struct usense_device *dev, void *priv)
 	err = temp_read(temper->usb, &temp);
 	if (err < 0) {
 		fprintf(stderr, "%s: Can't read temperature\n", usense_device_name(dev));
-		return -EINVAL;
+		return err;
 	} else {
 		/* Kelvin */
 		char buff[48];
