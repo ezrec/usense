@@ -48,8 +48,8 @@ Get the properties of a device
 
  $ usense usb:003.2
  device=usb:003.2
- gotemp.cal.add=-0.05
- gotemp.cal.mul=1.002
+ calibrate.add=-0.05
+ calibrate.mul=1.002
  reading=27
  type=temp
  units=C
@@ -66,8 +66,8 @@ Configuration
 
  $ usense usb:003.2
  device=usb:003.2
- gotemp.cal.add=-0.05
- gotemp.cal.mul=1.002
+ calbrate.add=-0.05
+ calbrate.mul=1.002
  reading=27
  type=temp
  units=C
@@ -77,5 +77,5 @@ Configuration
 Set properties on the command line, *before* the property
 you want to read:
 
- $ usense usb:003.2 gotemp.cal.mul=1.003 units=F reading
+ $ usense usb:003.2 calibrate.mul=1.003 units=F reading
  106

@@ -192,6 +192,8 @@ static struct usense_device *usense_device_new(struct usense *usense, const char
 	dev->handle = handle;
 	dev->probe = probe;
 
+	usense_prop_set(dev, "calibrate.add", "0.0");
+	usense_prop_set(dev, "calibrate.mult", "1.0");
 	usense_prop_set(dev, "reading", "unknown");
 	usense_prop_set(dev, "name", dev->name);
 
@@ -276,6 +278,8 @@ static int usense_prop_validate(struct usense_device *dev)
 		"units",
 		"reading",
 		"name",
+		"calibrate.add",
+		"calibrate.mult",
 	};
 	const char *type_usb[] = {
 		"usb.vendor",
@@ -518,10 +522,13 @@ static void convert_reading(struct usense_device *dev, const char *val, char *bu
 	uint32_t units;
 	char ubuff[USENSE_PROP_MAX];
 	char tbuff[USENSE_PROP_MAX];
+	char abuff[USENSE_PROP_MAX];
+	char mbuff[USENSE_PROP_MAX];
+	char *tmp;
 	int err,n;
-	double d;
+	double reading, d, offset_add, offset_mult;
 
-	err = sscanf(val, "%lg%n", &d, &n);
+	err = sscanf(val, "%lg%n", &reading, &n);
 	if (err != 1 || n != strlen(val)) {
 		/* Evidently the device knows better than we do.
 		 */
@@ -535,26 +542,44 @@ static void convert_reading(struct usense_device *dev, const char *val, char *bu
 	err = usense_prop_get(dev, "units", ubuff, sizeof(ubuff));
 	assert(err > 0);
 
+	offset_add = 0.0;
+	err = usense_prop_get(dev, "calibrate.add", abuff, sizeof(abuff));
+	if (err > 0) {
+		d = strtod(abuff, &tmp);
+		if (tmp != abuff && *tmp == 0)
+			offset_add = d;
+	}
+
+	offset_mult = 1.0;
+	err = usense_prop_get(dev, "calibrate.mult", abuff, sizeof(abuff));
+	if (err > 0) {
+		d = strtod(abuff, &tmp);
+		if (tmp != abuff && *tmp == 0)
+			offset_mult = d;
+	}
+
 	units = units_is_valid(tbuff, ubuff);
 	assert(units != 0);
 
+	reading = (reading + offset_add) * offset_mult;
+
 	switch (USENSE_UNITS_of(units)) {
 	case USENSE_UNITS_KELVIN:     break;	/* Kelvin is temp native */
-	case USENSE_UNITS_CELSIUS:    d = K_TO_C(d); break;
-	case USENSE_UNITS_FAHRENHEIT: d = K_TO_F(d); break;
+	case USENSE_UNITS_CELSIUS:    reading = K_TO_C(reading); break;
+	case USENSE_UNITS_FAHRENHEIT: reading = K_TO_F(reading); break;
 	default:
 		assert(USENSE_UNITS_of(units) == USENSE_UNITS_UNITLESS );
 		break;
 	}
 
 	n = USENSE_UNITS_POW_10_of(units);
-	d /= power10(n);
+	reading /= power10(n);
 
 	/* MilliUnits and MicroUnits are integer */
 	if (n < -1)
-		snprintf(buff, len, "%lld", (long long int)d);
+		snprintf(buff, len, "%lld", (long long int)reading);
 	else
-		snprintf(buff, len, "%g", d);
+		snprintf(buff, len, "%g", reading);
 }
 
 
@@ -613,6 +638,10 @@ int usense_prop_set(struct usense_device *dev, const char *key, const char *valu
 
 		writable = 1;
 	}
+	
+	if ((strcmp(key,"calibrate.add") == 0) ||
+            (strcmp(key,"calibrate.mult") == 0))
+		writable = 1;
 
 	/* Does the device says it's writable? */
 	if (!writable

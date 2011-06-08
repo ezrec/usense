@@ -134,8 +134,6 @@ const char *usense_device_name(struct usense_device *dev);
  *
  * Device specific properties should be device_type.prop_name, ie:
  *
- *   gotemp.cal.add	X in reading = (temp + x) * y
- *   gotemp.cal.mul	Y in reading = (temp + x) * y
  *   TEMPer.precision	9 or 12 bits
  */
 int usense_prop_get(struct usense_device *dev, const char *prop, char *buff, size_t len);

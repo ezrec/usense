@@ -36,39 +36,10 @@ struct gotemp {
 		int16_t measurement1;
 		int16_t measurement2;
 	} __attribute__((packed)) packet;
-
-	struct {
-		double add;
-		double mult;
-	} calibrate;
 };
 
 static int gotemp_on_prop_set(struct usense_device *dev, void *priv, const char *key, const char *val)
 {
-	struct gotemp *gotemp = priv;
-	char buff[PATH_MAX];
-	const char *cp;
-	int err, len;
-	double d;
-
-	if (strcmp(key, "gotemp.cal.add") == 0) {
-		err = sscanf(val, "%lf%n", &d, &len);
-		if (err != 1 || len != strlen(val)) {
-			return -EINVAL;
-		}
-		gotemp->calibrate.add = d;
-		return 0;
-	}
-
-	if (strcmp(key, "gotemp.cal.mul") == 0) {
-		err = sscanf(val, "%lf%n", &d, &len);
-		if (err != 1 || len != strlen(val)) {
-			return -EINVAL;
-		}
-		gotemp->calibrate.mult = d;
-		return 0;
-	}
-
 	return -EINVAL;
 }
 
@@ -100,7 +71,7 @@ int gotemp_update(struct usense_device *dev, void *priv)
 		}
 	} while (0);
 
-	kelvin = C_TO_K((((double) gotemp->packet.measurement0) * conversion * gotemp->calibrate.mult) + gotemp->calibrate.add);
+	kelvin = C_TO_K(((double) gotemp->packet.measurement0) * conversion);
 	snprintf(buff, sizeof(buff), "%g", kelvin);
 	return usense_prop_set(dev, "reading", buff);
 }
@@ -117,17 +88,10 @@ static int gotemp_attach(struct usense_device *dev, struct usb_dev_handle *usb, 
 	}
 
 	gotemp->usb = usb;
-	gotemp->calibrate.add = 0.0;
-	gotemp->calibrate.mult = 1.0;
 
 	/* Set the device and type */
 	usense_prop_set(dev, "device", "gotemp");
 	usense_prop_set(dev, "type", "temp");
-
-	snprintf(buff, sizeof(buff), "%g", gotemp->calibrate.add);
-	usense_prop_set(dev, "gotemp.cal.add", buff);
-	snprintf(buff, sizeof(buff), "%g", gotemp->calibrate.mult);
-	usense_prop_set(dev, "gotemp.cal.mul", buff);
 
 	/* Do a dummy update first */
 	gotemp_update(dev, gotemp);
